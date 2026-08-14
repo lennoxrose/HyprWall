@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::monitor::{Monitor, Rect};
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct MonitorRegistry {
     monitors: HashMap<String, Monitor>,
 }

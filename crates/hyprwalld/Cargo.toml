@@ -5,10 +5,15 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.104"
+calloop = "0.14.4"
+calloop-wayland-source = "0.4.1"
 dirs = "6.0.0"
 hyprwall-ipc = { version = "0.1.0", path = "../hyprwall-ipc" }
 serde = { version = "1.0.229", features = ["derive"] }
+smithay-client-toolkit = "0.21.1"
 toml = "1.1.4"
+wayland-client = "0.31.15"
+wayland-protocols-wlr = { version = "0.3.12", features = ["client"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"

@@ -75,6 +75,7 @@ mod integration_tests {
     use crate::app::AppState;
     use crate::ipc::handler::handle_command;
     use crate::monitor_registry::MonitorRegistry;
+    use crate::render::RenderResources;
 
     use super::bind_listener;
 
@@ -87,6 +88,7 @@ mod integration_tests {
 
         let server = thread::spawn(move || {
             let mut state = AppState::new(MonitorRegistry::new(), config_path);
+            let mut render = RenderResources::new_headless_for_test();
             // Empty registry: `monitor list` should come back empty, and
             // `set` on any name should be rejected as unknown — this is the
             // seam Task 7 fills in later with real Wayland outputs.
@@ -94,7 +96,7 @@ mod integration_tests {
             let mut line = String::new();
             conn.read_to_string(&mut line).unwrap();
             let cmd = hyprwall_ipc::parse_command(&line).unwrap();
-            let resp = handle_command(&mut state, cmd);
+            let resp = handle_command(&mut state, cmd, &mut render);
             conn.write_all(resp.to_wire().as_bytes()).unwrap();
         });
 

@@ -11,6 +11,7 @@ dirs = "6.0.0"
 glow = "0.18.0"
 hyprwall-ipc = { version = "0.1.0", path = "../hyprwall-ipc" }
 khronos-egl = { version = "6.0.0", features = ["dynamic"] }
+libmpv2 = { version = "6.0.0", features = ["render"] }
 serde = { version = "1.0.229", features = ["derive"] }
 smithay-client-toolkit = "0.21.1"
 toml = "1.1.4"

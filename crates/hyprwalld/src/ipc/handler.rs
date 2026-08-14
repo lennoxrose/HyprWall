@@ -3,9 +3,18 @@ use hyprwall_ipc::{Command, Response};
 use crate::app::AppState;
 use crate::config::model::{Config, ZoneConfig};
 use crate::config::store;
+use crate::render::RenderResources;
 use crate::zone_manager::ZoneError;
 
-pub fn handle_command(state: &mut AppState, cmd: Command) -> Response {
+/// `render` is `&mut` (not pure logic, unlike the rest of this function)
+/// because `Command::Set` may need to create/replace a zone's `MpvInstance`
+/// + `ZoneTarget`, and `Command::Pause`/`Play` need to reach the zone's live
+/// `MpvInstance` to actually toggle playback -- see `render::RenderResources`.
+/// Tests that don't need real GL/mpv pass `RenderResources::
+/// new_headless_for_test()`, under which the GL-touching parts of `Set`
+/// silently no-op while the pure `ZoneManager` bookkeeping they assert on
+/// still runs.
+pub fn handle_command(state: &mut AppState, cmd: Command, render: &mut RenderResources) -> Response {
     match cmd {
         Command::MonitorList => Response::MonitorList(state.registry.names()),
         Command::Get { monitor } => match state.zones.path_for_monitor(&monitor) {
@@ -13,9 +22,10 @@ pub fn handle_command(state: &mut AppState, cmd: Command) -> Response {
             None => Response::Error(format!("no wallpaper set for {monitor}")),
         },
         Command::Set { monitors, path } => {
-            match state.zones.apply_set(&monitors, path, &state.registry) {
-                Ok(_outcome) => {
+            match state.zones.apply_set(&monitors, path.clone(), &state.registry) {
+                Ok(outcome) => {
                     persist(state);
+                    render.apply_set_outcome(&outcome, &monitors, &path);
                     Response::Ok
                 }
                 Err(ZoneError::UnknownMonitor(name)) => {
@@ -23,16 +33,21 @@ pub fn handle_command(state: &mut AppState, cmd: Command) -> Response {
                 }
             }
         }
-        // Pause/Play act on playback state that only exists once a zone has a
-        // running mpv instance (Task 10). Until then, report clearly rather
-        // than silently succeeding.
-        Command::Pause { monitor } | Command::Play { monitor } => {
-            if state.zones.path_for_monitor(&monitor).is_some() {
-                Response::Error("playback control not implemented yet".to_string())
-            } else {
-                Response::Error(format!("no wallpaper set for {monitor}"))
-            }
-        }
+        Command::Pause { monitor } => set_paused(state, render, &monitor, true),
+        Command::Play { monitor } => set_paused(state, render, &monitor, false),
+    }
+}
+
+fn set_paused(state: &AppState, render: &RenderResources, monitor: &str, paused: bool) -> Response {
+    let Some(zone) = state.zones.zone_for_monitor(monitor) else {
+        return Response::Error(format!("no wallpaper set for {monitor}"));
+    };
+    let Some(zp) = render.zone_playback.get(&zone.id) else {
+        return Response::Error(format!("no active playback for {monitor}"));
+    };
+    match zp.mpv.set_paused(paused) {
+        Ok(()) => Response::Ok,
+        Err(e) => Response::Error(format!("failed to set pause state: {e}")),
     }
 }
 
@@ -76,29 +91,35 @@ mod tests {
     #[test]
     fn monitor_list_returns_registry_names() {
         let mut state = state_with(&["eDP-1", "HDMI-A-1"]);
-        let resp = handle_command(&mut state, Command::MonitorList);
+        let mut render = RenderResources::new_headless_for_test();
+        let resp = handle_command(&mut state, Command::MonitorList, &mut render);
         assert_eq!(resp, Response::MonitorList(vec!["HDMI-A-1".to_string(), "eDP-1".to_string()]));
     }
 
     #[test]
     fn set_then_get_round_trips() {
         let mut state = state_with(&["eDP-1"]);
+        let mut render = RenderResources::new_headless_for_test();
         let set_resp = handle_command(
             &mut state,
             Command::Set { monitors: vec!["eDP-1".to_string()], path: "/a.mp4".to_string() },
+            &mut render,
         );
         assert_eq!(set_resp, Response::Ok);
 
-        let get_resp = handle_command(&mut state, Command::Get { monitor: "eDP-1".to_string() });
+        let get_resp =
+            handle_command(&mut state, Command::Get { monitor: "eDP-1".to_string() }, &mut render);
         assert_eq!(get_resp, Response::Path("/a.mp4".to_string()));
     }
 
     #[test]
     fn set_unknown_monitor_returns_error() {
         let mut state = state_with(&["eDP-1"]);
+        let mut render = RenderResources::new_headless_for_test();
         let resp = handle_command(
             &mut state,
             Command::Set { monitors: vec!["eDP-9".to_string()], path: "/a.mp4".to_string() },
+            &mut render,
         );
         assert_eq!(resp, Response::Error("unknown monitor eDP-9".to_string()));
     }
@@ -106,22 +127,54 @@ mod tests {
     #[test]
     fn get_before_set_returns_error() {
         let mut state = state_with(&["eDP-1"]);
-        let resp = handle_command(&mut state, Command::Get { monitor: "eDP-1".to_string() });
+        let mut render = RenderResources::new_headless_for_test();
+        let resp =
+            handle_command(&mut state, Command::Get { monitor: "eDP-1".to_string() }, &mut render);
         assert_eq!(resp, Response::Error("no wallpaper set for eDP-1".to_string()));
     }
 
     #[test]
     fn set_persists_to_config_file() {
         let mut state = state_with(&["eDP-1", "HDMI-A-1"]);
+        let mut render = RenderResources::new_headless_for_test();
         handle_command(
             &mut state,
             Command::Set {
                 monitors: vec!["eDP-1".to_string(), "HDMI-A-1".to_string()],
                 path: "/pano.mp4".to_string(),
             },
+            &mut render,
         );
         let loaded = store::load(&state.config_path).unwrap();
         assert_eq!(loaded.zones.len(), 1);
         assert_eq!(loaded.zones[0].path, "/pano.mp4");
+    }
+
+    #[test]
+    fn pause_without_set_returns_error() {
+        let mut state = state_with(&["eDP-1"]);
+        let mut render = RenderResources::new_headless_for_test();
+        let resp =
+            handle_command(&mut state, Command::Pause { monitor: "eDP-1".to_string() }, &mut render);
+        assert_eq!(resp, Response::Error("no wallpaper set for eDP-1".to_string()));
+    }
+
+    #[test]
+    fn pause_after_set_without_gpu_reports_no_active_playback() {
+        // Headless `RenderResources` never creates a real `MpvInstance` (no
+        // GL/EGL in a test environment), so `Set` succeeds (the pure
+        // `ZoneManager` bookkeeping this module is responsible for) but
+        // there is nothing live to pause -- that's a distinct, honest error
+        // from "no wallpaper set at all".
+        let mut state = state_with(&["eDP-1"]);
+        let mut render = RenderResources::new_headless_for_test();
+        handle_command(
+            &mut state,
+            Command::Set { monitors: vec!["eDP-1".to_string()], path: "/a.mp4".to_string() },
+            &mut render,
+        );
+        let resp =
+            handle_command(&mut state, Command::Pause { monitor: "eDP-1".to_string() }, &mut render);
+        assert_eq!(resp, Response::Error("no active playback for eDP-1".to_string()));
     }
 }

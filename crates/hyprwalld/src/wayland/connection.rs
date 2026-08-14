@@ -22,12 +22,18 @@
 //! which needs `CompositorState` (and `AppData: CompositorHandler`) -- none
 //! of that existed before Task 8.
 //!
-//! Event pump: `WaylandBackend::event_queue.blocking_dispatch(&mut AppData)`
-//! is the dispatch entrypoint. `main.rs` calls it in a loop on a background
-//! thread; each successful dispatch may have run `AppData`'s `OutputHandler`
-//! callbacks, which synchronously update `AppData.monitors` in place.
+//! Event pump (changed in Task 10): `main.rs` no longer runs
+//! `blocking_dispatch` on a background thread. It inserts `WaylandBackend`'s
+//! connection + event queue into the single calloop event loop that also
+//! drives IPC and per-zone render pings, via `calloop_wayland_source::
+//! WaylandSource`, and calls `EventQueue::dispatch_pending(&mut AppData)`
+//! from that source's callback. Everything here (including every EGL/GL
+//! call) therefore runs on calloop's one thread -- necessary because
+//! `MonitorSurface`/`EglCore` (see `render/egl_context.rs`) are `!Send` and
+//! because EGL contexts are thread-affine anyway.
 
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use glow::HasContext;
 use smithay_client_toolkit::compositor::{CompositorHandler, CompositorState};
@@ -45,10 +51,11 @@ use wayland_client::{Connection, QueueHandle};
 use super::output::LayerSurfaces;
 use crate::monitor::{Monitor, Rect};
 use crate::monitor_registry::MonitorRegistry;
-use crate::render::egl_context::EglContext;
+use crate::render::egl_context::{EglCore, MonitorSurface};
 
-/// Dark blue-gray clear color proving the EGL render pipeline works, ahead
-/// of Task 10 layering real video frames on top of it.
+/// Dark blue-gray clear color shown for one frame when a monitor's surface
+/// is first created, before any zone has been `set` on it (or if it never
+/// is).
 const CLEAR_COLOR: (f32, f32, f32, f32) = (0.05, 0.05, 0.08, 1.0);
 
 pub struct WaylandBackend {
@@ -64,12 +71,30 @@ pub struct AppData {
     pub layer_shell: LayerShell,
     pub layer_surfaces: LayerSurfaces,
     pub monitors: MonitorRegistry,
-    /// Per-monitor EGL context + GL function table, keyed by output name.
-    /// Kept separate from `layer_surfaces` per the one-file-one-job
-    /// convention: `wayland/output.rs` tracks surfaces, render state lives
-    /// here. Populated lazily from the `configure` callback below (Task 9);
-    /// Task 10 will use these same contexts for video frame uploads.
-    pub render_targets: HashMap<String, EglContext>,
+    /// Per-monitor EGL window surface, keyed by output name, all sharing
+    /// `egl_core`'s single GL context/namespace (Task 10: a zone's video
+    /// frame is rendered once into an offscreen texture and a different crop
+    /// blitted into each member monitor's surface, which requires every
+    /// monitor to see the same GL objects -- see `render/egl_context.rs`'s
+    /// module docs). Wrapped in `Rc` so `render::RenderResources` can hold
+    /// its own mirrored clone (`sync_monitor_surfaces`) without owning
+    /// Wayland state; kept separate from `layer_surfaces` per the
+    /// one-file-one-job convention. Populated lazily from the `configure`
+    /// callback below.
+    pub render_targets: HashMap<String, Rc<MonitorSurface>>,
+    /// The shared EGL context/config, created alongside the first monitor's
+    /// surface and reused for every subsequent one. `None` until then.
+    pub egl_core: Option<Rc<EglCore>>,
+    /// Output names whose layer surface still needs destroying, queued by
+    /// `output_destroyed` instead of destroyed immediately. Destroying the
+    /// `wl_surface` must not happen until every `Rc<MonitorSurface>`
+    /// referencing it -- including any clone `render::RenderResources` is
+    /// still holding from before this dispatch tick's `sync_monitor_
+    /// surfaces` call -- has actually dropped (see `MonitorSurface`'s own
+    /// drop-order requirement). `main.rs` drains this right after calling
+    /// `sync_monitor_surfaces`, which is the point that stale clone is
+    /// guaranteed gone.
+    pub pending_layer_destroy: Vec<String>,
 }
 
 impl WaylandBackend {
@@ -101,6 +126,8 @@ impl WaylandBackend {
             layer_surfaces: LayerSurfaces::new(),
             monitors: MonitorRegistry::new(),
             render_targets: HashMap::new(),
+            egl_core: None,
+            pending_layer_destroy: Vec::new(),
         };
         Ok((backend, data))
     }
@@ -134,15 +161,17 @@ impl OutputHandler for AppData {
         if let Some(info) = self.output_state.info(&output) {
             if let Some(name) = info.name {
                 self.monitors.remove(&name);
-                // Drop the EglContext (if one was ever created for this
-                // output) first: its `Drop` impl destroys the EGL
-                // surface/context and the wrapped `wl_egl_window`, which
-                // must happen while the underlying `wl_surface` is still
-                // alive. Only then destroy the layer surface itself
-                // (dropping `LayerSurface` destroys its `wl_surface`
-                // protocol-side).
+                // Drop this struct's own `Rc<MonitorSurface>` now, but do
+                // NOT destroy the layer surface yet: `render::
+                // RenderResources` may still be holding its own clone of the
+                // same `Rc` from before this dispatch tick's `sync_monitor_
+                // surfaces` call, and destroying the `wl_surface` while that
+                // clone's EGL surface is still alive would violate
+                // `MonitorSurface`'s drop-order requirement. Queue the name;
+                // `main.rs` destroys it right after resyncing, once that
+                // stale clone (if any) is guaranteed dropped.
                 self.render_targets.remove(&name);
-                self.layer_surfaces.destroy(&name);
+                self.pending_layer_destroy.push(name);
             }
         }
     }
@@ -240,29 +269,42 @@ impl LayerShellHandler for AppData {
             return;
         };
 
-        let wl_display_ptr = conn.backend().display_ptr() as *mut std::ffi::c_void;
-        let egl_context = match EglContext::new(wl_display_ptr, layer.wl_surface(), width, height) {
-            Ok(ctx) => ctx,
-            Err(e) => {
-                eprintln!("hyprwalld: failed to create EGL context for {name}: {e}");
-                return;
+        let (core, surface) = if let Some(core) = &self.egl_core {
+            match core.create_surface(layer.wl_surface(), width, height) {
+                Ok(surface) => (Rc::clone(core), surface),
+                Err(e) => {
+                    eprintln!("hyprwalld: failed to create EGL surface for {name}: {e}");
+                    return;
+                }
+            }
+        } else {
+            let wl_display_ptr = conn.backend().display_ptr() as *mut std::ffi::c_void;
+            match EglCore::new(wl_display_ptr, layer.wl_surface(), width, height) {
+                Ok((core, surface)) => (core, surface),
+                Err(e) => {
+                    eprintln!("hyprwalld: failed to create EGL context for {name}: {e}");
+                    return;
+                }
             }
         };
+        if self.egl_core.is_none() {
+            self.egl_core = Some(Rc::clone(&core));
+        }
 
-        if let Err(e) = egl_context.make_current() {
+        if let Err(e) = surface.make_current() {
             eprintln!("hyprwalld: eglMakeCurrent failed for {name}: {e}");
             return;
         }
         unsafe {
-            egl_context.gl.clear_color(CLEAR_COLOR.0, CLEAR_COLOR.1, CLEAR_COLOR.2, CLEAR_COLOR.3);
-            egl_context.gl.clear(glow::COLOR_BUFFER_BIT);
+            surface.gl().clear_color(CLEAR_COLOR.0, CLEAR_COLOR.1, CLEAR_COLOR.2, CLEAR_COLOR.3);
+            surface.gl().clear(glow::COLOR_BUFFER_BIT);
         }
-        if let Err(e) = egl_context.swap_buffers() {
+        if let Err(e) = surface.swap_buffers() {
             eprintln!("hyprwalld: eglSwapBuffers failed for {name}: {e}");
             return;
         }
 
-        self.render_targets.insert(name, egl_context);
+        self.render_targets.insert(name, Rc::new(surface));
     }
 }
 

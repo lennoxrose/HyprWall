@@ -37,6 +37,19 @@ pub struct ZonePlayback {
     pub monitors: Vec<String>,
 }
 
+/// A `ZoneApplyOutcome` that `apply_set_outcome` couldn't fully realize yet
+/// because no EGL core exists, or none of the target monitors' surfaces have
+/// been configured by Wayland yet (a real race at daemon startup: a startup
+/// script's first `hyprwallctl set` can easily arrive before every output has
+/// finished its first `configure`). Retried by `retry_pending_sets` once
+/// `sync_monitor_surfaces` refreshes the mirrored surfaces.
+#[derive(Clone)]
+struct PendingSet {
+    outcome: ZoneApplyOutcome,
+    monitors: Vec<String>,
+    path: String,
+}
+
 #[derive(Default)]
 pub struct RenderResources {
     core: Option<Rc<EglCore>>,
@@ -50,6 +63,9 @@ pub struct RenderResources {
     /// drains this after every command and calls `frame_scheduler::register`
     /// for each id.
     pub needs_wakeup_wiring: Vec<u64>,
+    /// `Set`s that raced monitor configuration, keyed by the zone id they
+    /// would have (re)formed. See `PendingSet`.
+    pending_sets: HashMap<u64, PendingSet>,
 }
 
 impl RenderResources {
@@ -70,9 +86,69 @@ impl RenderResources {
     /// shared EGL core from `AppData`. Cheap: only clones `Rc`s. Call after
     /// every Wayland dispatch tick, before handling any IPC command, so
     /// `Command::Set` always sees up-to-date surfaces.
+    ///
+    /// Also retries any `Set` that previously raced monitor configuration
+    /// (see `PendingSet`) now that the surfaces just got refreshed -- this is
+    /// the only place new `MonitorSurface`s become visible to this struct, so
+    /// it's the right point to check whether a pending zone's monitor(s) are
+    /// ready yet.
     pub fn sync_monitor_surfaces(&mut self, app_data: &AppData) {
         self.monitor_surfaces = app_data.render_targets.clone();
         self.core = app_data.egl_core.clone();
+        self.retry_pending_sets();
+    }
+
+    /// Retries every `Set` recorded as pending. A no-op if still not ready
+    /// (re-records itself via `apply_set_outcome`); harmless to call when
+    /// `pending_sets` is empty.
+    fn retry_pending_sets(&mut self) {
+        if self.pending_sets.is_empty() {
+            return;
+        }
+        let pending: Vec<PendingSet> = self.pending_sets.values().cloned().collect();
+        for p in pending {
+            self.apply_set_outcome(&p.outcome, &p.monitors, &p.path);
+        }
+    }
+
+    /// Removes and (if a GL context is available) destroys a zone's playback
+    /// resources, without any `ZoneManager` bookkeeping -- the caller is
+    /// responsible for that side (either `apply_set_outcome`'s
+    /// `dissolved_zone_ids` handling, or `teardown_zone` below for a monitor
+    /// unplug). A no-op if the zone has no live playback (headless test, or a
+    /// zone that raced monitor configuration and never got resources in the
+    /// first place).
+    fn drop_zone_playback(&mut self, zone_id: u64) {
+        if let Some(zp) = self.zone_playback.remove(&zone_id)
+            && let Some(core) = &self.core
+        {
+            zp.target.destroy(&core.gl);
+        }
+        self.pending_sets.remove(&zone_id);
+    }
+
+    /// Tears down a zone's playback resources (`MpvInstance` + `ZoneTarget`).
+    /// Called from `main.rs` after `ZoneManager::remove_monitor` reports a
+    /// zone was fully dissolved by a monitor unplug -- unlike a `Set`-
+    /// triggered dissolve, there is no replacement zone to also set up here.
+    pub fn teardown_zone(&mut self, zone_id: u64) {
+        self.drop_zone_playback(zone_id);
+    }
+
+    /// Records (or overwrites) a pending `Set` for `outcome.zone_id`, so it
+    /// gets retried by `sync_monitor_surfaces` instead of being dropped.
+    fn record_pending(&mut self, outcome: &ZoneApplyOutcome, monitors: &[String], path: &str) {
+        self.pending_sets.insert(
+            outcome.zone_id,
+            PendingSet { outcome: outcome.clone(), monitors: monitors.to_vec(), path: path.to_string() },
+        );
+    }
+
+    /// Test-only accessor so `pending_sets` can stay private while still
+    /// being assertable from `#[cfg(test)]` code in this module.
+    #[cfg(test)]
+    fn pending_set_count(&self) -> usize {
+        self.pending_sets.len()
     }
 
     /// Applies a successful `ZoneManager::apply_set` outcome: drops
@@ -85,21 +161,29 @@ impl RenderResources {
     /// not-yet-configured monitor's first Wayland `configure`) or when none
     /// of `monitors`' surfaces exist yet -- `ZoneManager`'s bookkeeping (and
     /// therefore `Get`/config persistence) still succeeds either way; only
-    /// the actual pixels are best-effort.
+    /// the actual pixels are best-effort. In that case the outcome is
+    /// recorded in `pending_sets` and retried by `sync_monitor_surfaces`
+    /// once a relevant monitor surface becomes available, instead of being
+    /// silently dropped forever.
     pub fn apply_set_outcome(&mut self, outcome: &ZoneApplyOutcome, monitors: &[String], path: &str) {
         for id in &outcome.dissolved_zone_ids {
-            if let Some(zp) = self.zone_playback.remove(id)
-                && let Some(core) = &self.core
-            {
-                zp.target.destroy(&core.gl);
-            }
+            self.drop_zone_playback(*id);
         }
 
-        let Some(core) = self.core.clone() else { return };
-        let Some(any_surface) = monitors.iter().find_map(|m| self.monitor_surfaces.get(m).cloned())
-        else {
+        let Some(core) = self.core.clone() else {
+            self.record_pending(outcome, monitors, path);
             return;
         };
+        let Some(any_surface) = monitors.iter().find_map(|m| self.monitor_surfaces.get(m).cloned())
+        else {
+            self.record_pending(outcome, monitors, path);
+            return;
+        };
+        // Ready as of this call -- clear any earlier pending entry for this
+        // zone so a later, unrelated failure below (a real GL/mpv error, not
+        // "not ready yet") doesn't get silently retried forever.
+        self.pending_sets.remove(&outcome.zone_id);
+
         if let Err(e) = any_surface.make_current() {
             eprintln!(
                 "hyprwalld: eglMakeCurrent failed while setting up zone {}: {e}",
@@ -190,5 +274,80 @@ impl RenderResources {
                 eprintln!("hyprwalld: eglSwapBuffers failed for {name}: {e}");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::monitor::Rect;
+
+    fn outcome(zone_id: u64) -> ZoneApplyOutcome {
+        ZoneApplyOutcome {
+            zone_id,
+            bounding_box: Rect { x: 0, y: 0, w: 1920, h: 1080 },
+            dissolved_zone_ids: Vec::new(),
+        }
+    }
+
+    // Full end-to-end "surface becomes ready, pending Set completes" can't
+    // be exercised headlessly -- it needs a real EGLCore/MonitorSurface,
+    // which needs a live Wayland connection (see the report for what a live
+    // test would look like). These cover the part that *can* run headless:
+    // a Set that races monitor configuration is recorded instead of
+    // silently dropped, and retrying it while still not ready is a stable
+    // no-op rather than a panic or a leak.
+
+    #[test]
+    fn set_with_no_core_is_recorded_as_pending_not_dropped() {
+        let mut render = RenderResources::new_headless_for_test();
+        render.apply_set_outcome(&outcome(1), &["eDP-1".to_string()], "/a.mp4");
+        assert_eq!(render.pending_set_count(), 1);
+        // The GL-free part still didn't blow up and there's still no live
+        // playback to accidentally report as active.
+        assert!(render.zone_playback.is_empty());
+    }
+
+    #[test]
+    fn retrying_while_still_not_ready_is_idempotent() {
+        let mut render = RenderResources::new_headless_for_test();
+        render.apply_set_outcome(&outcome(1), &["eDP-1".to_string()], "/a.mp4");
+        assert_eq!(render.pending_set_count(), 1);
+
+        // sync_monitor_surfaces can't be called without a real AppData, but
+        // it's a thin wrapper around exactly this retry call -- exercise it
+        // directly to confirm repeated retries neither panic nor duplicate
+        // the pending entry while nothing has become ready.
+        render.retry_pending_sets();
+        render.retry_pending_sets();
+        assert_eq!(render.pending_set_count(), 1);
+        assert!(render.zone_playback.is_empty());
+    }
+
+    #[test]
+    fn dissolving_a_zone_clears_its_pending_set() {
+        let mut render = RenderResources::new_headless_for_test();
+        render.apply_set_outcome(&outcome(1), &["eDP-1".to_string()], "/a.mp4");
+        assert_eq!(render.pending_set_count(), 1);
+
+        // A later Set that dissolves zone 1 (e.g. its only monitor got
+        // reassigned elsewhere) should give up on the stale pending retry,
+        // not keep trying to realize a zone that no longer exists.
+        let mut later = outcome(2);
+        later.dissolved_zone_ids.push(1);
+        render.apply_set_outcome(&later, &["HDMI-A-1".to_string()], "/b.mp4");
+
+        assert_eq!(render.pending_set_count(), 1, "zone 2's own Set is now pending in zone 1's place");
+        assert!(render.zone_playback.is_empty());
+    }
+
+    #[test]
+    fn teardown_zone_clears_a_pending_set_too() {
+        let mut render = RenderResources::new_headless_for_test();
+        render.apply_set_outcome(&outcome(1), &["eDP-1".to_string()], "/a.mp4");
+        assert_eq!(render.pending_set_count(), 1);
+
+        render.teardown_zone(1);
+        assert_eq!(render.pending_set_count(), 0);
     }
 }

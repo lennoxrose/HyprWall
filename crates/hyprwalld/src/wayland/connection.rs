@@ -95,6 +95,15 @@ pub struct AppData {
     /// `sync_monitor_surfaces`, which is the point that stale clone is
     /// guaranteed gone.
     pub pending_layer_destroy: Vec<String>,
+    /// Output names removed by `output_destroyed`, queued for `main.rs` to
+    /// feed into `ZoneManager::remove_monitor` and (if that dissolves a
+    /// zone) `RenderResources::teardown_zone`. `AppData` doesn't hold a
+    /// `ZoneManager`/`RenderResources` itself (see `Daemon` in `main.rs`), so
+    /// this is the same queue-and-drain hand-off pattern as
+    /// `pending_layer_destroy`, just for a different downstream effect.
+    /// Without this, a zone whose last monitor is unplugged never gets its
+    /// `MpvInstance`/`ZoneTarget` torn down and leaks until process exit.
+    pub pending_monitor_removals: Vec<String>,
 }
 
 impl WaylandBackend {
@@ -128,6 +137,7 @@ impl WaylandBackend {
             render_targets: HashMap::new(),
             egl_core: None,
             pending_layer_destroy: Vec::new(),
+            pending_monitor_removals: Vec::new(),
         };
         Ok((backend, data))
     }
@@ -171,6 +181,14 @@ impl OutputHandler for AppData {
                 // `main.rs` destroys it right after resyncing, once that
                 // stale clone (if any) is guaranteed dropped.
                 self.render_targets.remove(&name);
+                // Also queue the name for `ZoneManager::remove_monitor` +
+                // (if that dissolves a zone) `RenderResources::teardown_zone`
+                // -- see `pending_monitor_removals`'s doc comment. Without
+                // this, a zone whose last monitor is unplugged keeps its
+                // `MpvInstance`/`ZoneTarget` running (and using CPU/GPU)
+                // indefinitely, since nothing else ever calls `Set` again for
+                // it.
+                self.pending_monitor_removals.push(name.clone());
                 self.pending_layer_destroy.push(name);
             }
         }

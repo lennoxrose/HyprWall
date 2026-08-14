@@ -58,6 +58,16 @@ fn main() -> anyhow::Result<()> {
             // `AppData::pending_layer_destroy`'s doc comment for why this
             // must happen in this order.
             daemon.render.sync_monitor_surfaces(&daemon.app_data);
+            // Reflect any monitor unplugs into `ZoneManager`'s bookkeeping,
+            // and tear down playback for any zone that dissolved as a
+            // result (its last member monitor just disappeared). A zone
+            // that still has other monitors after this stays alive and
+            // keeps playing to them -- see `ZoneManager::remove_monitor`.
+            for name in daemon.app_data.pending_monitor_removals.drain(..).collect::<Vec<_>>() {
+                if let Some(zone_id) = daemon.state.zones.remove_monitor(&name) {
+                    daemon.render.teardown_zone(zone_id);
+                }
+            }
             for name in daemon.app_data.pending_layer_destroy.drain(..).collect::<Vec<_>>() {
                 daemon.app_data.layer_surfaces.destroy(&name);
             }

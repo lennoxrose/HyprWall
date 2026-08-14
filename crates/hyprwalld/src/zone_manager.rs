@@ -102,6 +102,32 @@ impl ZoneManager {
         Ok(ZoneApplyOutcome { zone_id, bounding_box, dissolved_zone_ids })
     }
 
+    /// Removes `monitor` from whatever zone currently holds it (if any),
+    /// dissolving that zone if it becomes empty as a result. Used for a
+    /// monitor unplug (`output_destroyed`), not a `Set` -- unlike
+    /// `apply_set`, this never tries to keep a zone alive for monitors that
+    /// were never named; it only reflects one monitor's disappearance.
+    ///
+    /// Returns the id of the zone that was dissolved, if any. A zone that
+    /// still has other monitors after `monitor` is removed keeps playing to
+    /// them and is *not* returned/dissolved (matches the spec: unplugging one
+    /// member of a multi-monitor zone keeps the zone running for the rest).
+    pub fn remove_monitor(&mut self, monitor: &str) -> Option<u64> {
+        for zone in &mut self.zones {
+            zone.monitors.retain(|m| m != monitor);
+        }
+        let mut dissolved = None;
+        self.zones.retain(|z| {
+            if z.monitors.is_empty() {
+                dissolved = Some(z.id);
+                false
+            } else {
+                true
+            }
+        });
+        dissolved
+    }
+
     pub fn zone_for_monitor(&self, monitor: &str) -> Option<&Zone> {
         self.zones.iter().find(|z| z.monitors.iter().any(|m| m == monitor))
     }
@@ -185,5 +211,38 @@ mod tests {
         let mut zm = ZoneManager::new();
         let err = zm.apply_set(&["eDP-9".to_string()], "/a.mp4".to_string(), &reg).unwrap_err();
         assert_eq!(err, ZoneError::UnknownMonitor("eDP-9".to_string()));
+    }
+
+    #[test]
+    fn remove_monitor_dissolves_a_single_monitor_zone() {
+        let reg = registry_with(&["eDP-1"]);
+        let mut zm = ZoneManager::new();
+        zm.apply_set(&["eDP-1".to_string()], "/a.mp4".to_string(), &reg).unwrap();
+        let zone_id = zm.zone_for_monitor("eDP-1").unwrap().id;
+
+        let dissolved = zm.remove_monitor("eDP-1");
+
+        assert_eq!(dissolved, Some(zone_id));
+        assert!(zm.zone_for_monitor("eDP-1").is_none());
+    }
+
+    #[test]
+    fn remove_monitor_keeps_a_multi_monitor_zone_alive_for_the_rest() {
+        let reg = registry_with(&["eDP-1", "HDMI-A-1"]);
+        let mut zm = ZoneManager::new();
+        zm.apply_set(&["eDP-1".to_string(), "HDMI-A-1".to_string()], "/pano.mp4".to_string(), &reg)
+            .unwrap();
+
+        let dissolved = zm.remove_monitor("eDP-1");
+
+        assert_eq!(dissolved, None, "HDMI-A-1 is still in the zone, it should not dissolve");
+        assert_eq!(zm.path_for_monitor("HDMI-A-1"), Some("/pano.mp4"));
+        assert!(zm.zone_for_monitor("eDP-1").is_none());
+    }
+
+    #[test]
+    fn remove_monitor_not_in_any_zone_is_a_no_op() {
+        let mut zm = ZoneManager::new();
+        assert_eq!(zm.remove_monitor("eDP-1"), None);
     }
 }

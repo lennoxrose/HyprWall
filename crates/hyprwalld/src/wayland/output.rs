@@ -80,4 +80,13 @@ impl LayerSurfaces {
     pub fn get(&self, name: &str) -> Option<&LayerSurface> {
         self.surfaces.get(name)
     }
+
+    /// Finds the output name that owns `layer`, by identity (`LayerSurface`
+    /// implements `PartialEq` by comparing the underlying `wl_surface`).
+    /// Used by the `configure` callback (Task 9), which is only handed the
+    /// `LayerSurface` itself, to know which monitor's render state to
+    /// create/update.
+    pub fn name_for(&self, layer: &LayerSurface) -> Option<&str> {
+        self.surfaces.iter().find(|(_, v)| *v == layer).map(|(k, _)| k.as_str())
+    }
 }

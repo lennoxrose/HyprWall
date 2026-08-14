@@ -24,6 +24,10 @@ impl MonitorRegistry {
         self.monitors.contains_key(name)
     }
 
+    pub fn get(&self, name: &str) -> Option<&Monitor> {
+        self.monitors.get(name)
+    }
+
     pub fn names(&self) -> Vec<String> {
         let mut names: Vec<String> = self.monitors.keys().cloned().collect();
         names.sort();

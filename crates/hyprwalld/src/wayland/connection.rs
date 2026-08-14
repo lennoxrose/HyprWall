@@ -27,12 +27,16 @@
 //! thread; each successful dispatch may have run `AppData`'s `OutputHandler`
 //! callbacks, which synchronously update `AppData.monitors` in place.
 
+use std::collections::HashMap;
+
+use glow::HasContext;
 use smithay_client_toolkit::compositor::{CompositorHandler, CompositorState};
 use smithay_client_toolkit::output::{OutputHandler, OutputState};
 use smithay_client_toolkit::registry::{ProvidesRegistryState, RegistryState};
 use smithay_client_toolkit::shell::wlr_layer::{
     LayerShell, LayerShellHandler, LayerSurface, LayerSurfaceConfigure,
 };
+use smithay_client_toolkit::shell::WaylandSurface;
 use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_handlers};
 use wayland_client::protocol::wl_output::{self, WlOutput};
 use wayland_client::protocol::wl_surface::WlSurface;
@@ -41,6 +45,11 @@ use wayland_client::{Connection, QueueHandle};
 use super::output::LayerSurfaces;
 use crate::monitor::{Monitor, Rect};
 use crate::monitor_registry::MonitorRegistry;
+use crate::render::egl_context::EglContext;
+
+/// Dark blue-gray clear color proving the EGL render pipeline works, ahead
+/// of Task 10 layering real video frames on top of it.
+const CLEAR_COLOR: (f32, f32, f32, f32) = (0.05, 0.05, 0.08, 1.0);
 
 pub struct WaylandBackend {
     pub conn: Connection,
@@ -55,6 +64,12 @@ pub struct AppData {
     pub layer_shell: LayerShell,
     pub layer_surfaces: LayerSurfaces,
     pub monitors: MonitorRegistry,
+    /// Per-monitor EGL context + GL function table, keyed by output name.
+    /// Kept separate from `layer_surfaces` per the one-file-one-job
+    /// convention: `wayland/output.rs` tracks surfaces, render state lives
+    /// here. Populated lazily from the `configure` callback below (Task 9);
+    /// Task 10 will use these same contexts for video frame uploads.
+    pub render_targets: HashMap<String, EglContext>,
 }
 
 impl WaylandBackend {
@@ -85,6 +100,7 @@ impl WaylandBackend {
             layer_shell,
             layer_surfaces: LayerSurfaces::new(),
             monitors: MonitorRegistry::new(),
+            render_targets: HashMap::new(),
         };
         Ok((backend, data))
     }
@@ -118,6 +134,14 @@ impl OutputHandler for AppData {
         if let Some(info) = self.output_state.info(&output) {
             if let Some(name) = info.name {
                 self.monitors.remove(&name);
+                // Drop the EglContext (if one was ever created for this
+                // output) first: its `Drop` impl destroys the EGL
+                // surface/context and the wrapped `wl_egl_window`, which
+                // must happen while the underlying `wl_surface` is still
+                // alive. Only then destroy the layer surface itself
+                // (dropping `LayerSurface` destroys its `wl_surface`
+                // protocol-side).
+                self.render_targets.remove(&name);
                 self.layer_surfaces.destroy(&name);
             }
         }
@@ -190,13 +214,55 @@ impl LayerShellHandler for AppData {
 
     fn configure(
         &mut self,
-        _conn: &Connection,
+        conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _layer: &LayerSurface,
-        _configure: LayerSurfaceConfigure,
+        layer: &LayerSurface,
+        configure: LayerSurfaceConfigure,
         _serial: u32,
     ) {
-        // Task 9 uses this to (re)size the EGL surface; nothing to do yet.
+        let Some(name) = self.layer_surfaces.name_for(layer).map(str::to_owned) else { return };
+
+        // Only create the render target once per output; resizing an
+        // existing EGL surface on later configure events is out of scope
+        // for this task (matches Task 8's create-once-on-new-output scope).
+        if self.render_targets.contains_key(&name) {
+            return;
+        }
+
+        // A `(0, 0)` size means "you choose" -- fall back to the monitor's
+        // known logical size.
+        let (width, height) = if configure.new_size.0 > 0 && configure.new_size.1 > 0 {
+            (configure.new_size.0 as i32, configure.new_size.1 as i32)
+        } else if let Some(monitor) = self.monitors.get(&name) {
+            (monitor.logical.w, monitor.logical.h)
+        } else {
+            eprintln!("hyprwalld: configure for {name} has no usable size yet, skipping");
+            return;
+        };
+
+        let wl_display_ptr = conn.backend().display_ptr() as *mut std::ffi::c_void;
+        let egl_context = match EglContext::new(wl_display_ptr, layer.wl_surface(), width, height) {
+            Ok(ctx) => ctx,
+            Err(e) => {
+                eprintln!("hyprwalld: failed to create EGL context for {name}: {e}");
+                return;
+            }
+        };
+
+        if let Err(e) = egl_context.make_current() {
+            eprintln!("hyprwalld: eglMakeCurrent failed for {name}: {e}");
+            return;
+        }
+        unsafe {
+            egl_context.gl.clear_color(CLEAR_COLOR.0, CLEAR_COLOR.1, CLEAR_COLOR.2, CLEAR_COLOR.3);
+            egl_context.gl.clear(glow::COLOR_BUFFER_BIT);
+        }
+        if let Err(e) = egl_context.swap_buffers() {
+            eprintln!("hyprwalld: eglSwapBuffers failed for {name}: {e}");
+            return;
+        }
+
+        self.render_targets.insert(name, egl_context);
     }
 }
 

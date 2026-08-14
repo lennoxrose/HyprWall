@@ -3,7 +3,7 @@ mod client;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use hyprwall_ipc::Command;
+use hyprwall_ipc::{Command, parse_response, Response};
 
 #[derive(Parser)]
 struct Cli {
@@ -41,7 +41,15 @@ fn main() {
     };
 
     match client::send(&socket_path(), &command) {
-        Ok(response) => println!("{response}"),
+        Ok(response) => {
+            match parse_response(&response) {
+                Response::Error(msg) => {
+                    eprintln!("hyprwallctl: {msg}");
+                    std::process::exit(1);
+                }
+                _ => println!("{response}"),
+            }
+        }
         Err(e) => {
             eprintln!("hyprwallctl: {e}");
             std::process::exit(1);

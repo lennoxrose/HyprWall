@@ -54,18 +54,21 @@ crates/
       wayland/
         connection.rs       # wl connection/registry bootstrap
         output.rs           # monitor add/remove tracking
+        xdg_output.rs       # logical position/size (zxdg_output_manager_v1)
         layer_surface.rs    # per-output zwlr_layer_shell surface
       render/
         egl_context.rs      # EGL context creation/binding
         mpv_instance.rs     # one libmpv render-API instance
+        zone_target.rs      # zone's offscreen FBO/texture + blit-to-monitor
         frame_scheduler.rs  # mpv wakeup -> calloop -> render dispatch
       ipc/
         socket.rs           # unix socket listen/accept, stale handling
         handler.rs          # parsed Command -> app action
       config/
-        model.rs            # TOML config structs
+        model.rs            # TOML config structs (zones)
         store.rs            # load/save
-      monitor.rs             # Monitor: output + surface + mpv + state
+      zone.rs                # Zone: monitor set + bounding box + mpv + target
+      monitor.rs              # Monitor: output + logical rect + surface + zone id
   hyprwallctl/               # thin CLI binary
     src/
       main.rs                # arg parse -> client -> print reply

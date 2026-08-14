@@ -239,6 +239,21 @@ impl RenderResources {
         }
     }
 
+    /// True if `name` is currently a member of some live zone's playback --
+    /// i.e. `render_and_present` would still (attempt to) blit to it once its
+    /// surface exists. Checked against this struct's own per-zone `monitors`
+    /// cache, not `ZoneManager`: `ZoneManager::remove_monitor` strips an
+    /// unplugged monitor from a *surviving* multi-monitor zone's own
+    /// bookkeeping (so `zone_for_monitor` correctly stops reporting it while
+    /// disconnected), but deliberately leaves this struct's cache untouched so
+    /// a later replug resumes blitting without recreating the zone -- see
+    /// that function's doc comment. `main.rs`'s config-restore logic uses this
+    /// to avoid restoring a fresh zone from disk on top of one that's already
+    /// live and just waiting for its surface to reappear.
+    pub fn is_monitor_live(&self, name: &str) -> bool {
+        self.zone_playback.values().any(|zp| zp.monitors.iter().any(|m| m == name))
+    }
+
     /// Renders one zone's current frame into its `ZoneTarget`, then blits
     /// the relevant crop into every member monitor's surface and presents
     /// it. Called from the zone's ping source (see `frame_scheduler`); a
@@ -349,5 +364,25 @@ mod tests {
 
         render.teardown_zone(1);
         assert_eq!(render.pending_set_count(), 0);
+    }
+
+    // `is_monitor_live` is used by main.rs's config-restore logic to avoid
+    // restoring a fresh zone on top of one that's already live. It reports
+    // membership from `zone_playback`'s own cache, not from `pending_sets` --
+    // a zone that's still waiting on its first surface isn't "live" yet in
+    // the sense that matters here (there's nothing to avoid clobbering).
+
+    #[test]
+    fn is_monitor_live_is_false_with_no_zones() {
+        let render = RenderResources::new_headless_for_test();
+        assert!(!render.is_monitor_live("eDP-1"));
+    }
+
+    #[test]
+    fn is_monitor_live_is_false_for_a_merely_pending_set() {
+        let mut render = RenderResources::new_headless_for_test();
+        render.apply_set_outcome(&outcome(1), &["eDP-1".to_string()], "/a.mp4");
+        assert_eq!(render.pending_set_count(), 1, "no GL core, so this only records a pending set");
+        assert!(!render.is_monitor_live("eDP-1"), "never got real playback resources, so not live");
     }
 }

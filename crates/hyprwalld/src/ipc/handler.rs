@@ -21,21 +21,40 @@ pub fn handle_command(state: &mut AppState, cmd: Command, render: &mut RenderRes
             Some(path) => Response::Path(path.to_string()),
             None => Response::Error(format!("no wallpaper set for {monitor}")),
         },
-        Command::Set { monitors, path } => {
-            match state.zones.apply_set(&monitors, path.clone(), &state.registry) {
-                Ok(outcome) => {
-                    persist(state);
-                    render.apply_set_outcome(&outcome, &monitors, &path);
-                    Response::Ok
-                }
-                Err(ZoneError::UnknownMonitor(name)) => {
-                    Response::Error(format!("unknown monitor {name}"))
-                }
+        Command::Set { monitors, path } => match apply_zone(state, render, &monitors, &path) {
+            Ok(()) => {
+                persist(state);
+                Response::Ok
             }
-        }
+            Err(ZoneError::UnknownMonitor(name)) => Response::Error(format!("unknown monitor {name}")),
+        },
         Command::Pause { monitor } => set_paused(state, render, &monitor, true),
         Command::Play { monitor } => set_paused(state, render, &monitor, false),
     }
+}
+
+/// Applies `monitors`/`path` via `ZoneManager::apply_set`, then wires up real
+/// playback via `RenderResources::apply_set_outcome` (a no-op beyond
+/// `ZoneManager` bookkeeping if there's no GL context or the monitors'
+/// surfaces aren't ready yet -- see that function's doc comment).
+///
+/// Deliberately does **not** persist to config -- that's `Command::Set`'s
+/// job, done once by its caller right above after this returns `Ok`. Startup/
+/// hotplug config restore (`main.rs`'s `restore_saved_zones`) calls this
+/// directly instead of going through `handle_command`, and must NOT persist:
+/// if only some of a saved config's zones have all their monitors present
+/// yet, persisting mid-restore would rebuild `config.toml` from `ZoneManager`'s
+/// current (partial) state and silently drop the not-yet-restored zones from
+/// disk before their monitors ever get a chance to reappear.
+pub fn apply_zone(
+    state: &mut AppState,
+    render: &mut RenderResources,
+    monitors: &[String],
+    path: &str,
+) -> Result<(), ZoneError> {
+    let outcome = state.zones.apply_set(monitors, path.to_string(), &state.registry)?;
+    render.apply_set_outcome(&outcome, monitors, path);
+    Ok(())
 }
 
 fn set_paused(state: &AppState, render: &RenderResources, monitor: &str, paused: bool) -> Response {
@@ -157,6 +176,20 @@ mod tests {
         let resp =
             handle_command(&mut state, Command::Pause { monitor: "eDP-1".to_string() }, &mut render);
         assert_eq!(resp, Response::Error("no wallpaper set for eDP-1".to_string()));
+    }
+
+    #[test]
+    fn apply_zone_does_not_persist_to_config_file() {
+        // Unlike `Command::Set`, `apply_zone` (used directly by main.rs's
+        // startup/hotplug config restore) must not write config.toml itself
+        // -- see its doc comment on why persisting mid-restore could drop
+        // not-yet-restored saved zones from disk.
+        let mut state = state_with(&["eDP-1"]);
+        let mut render = RenderResources::new_headless_for_test();
+        apply_zone(&mut state, &mut render, &["eDP-1".to_string()], "/a.mp4").unwrap();
+
+        assert!(!state.config_path.exists(), "apply_zone must not write config.toml");
+        assert_eq!(state.zones.path_for_monitor("eDP-1"), Some("/a.mp4"));
     }
 
     #[test]

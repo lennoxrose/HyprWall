@@ -212,6 +212,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "dirs",
+ "hyprwall-ipc",
  "serde",
  "tempfile",
  "toml",

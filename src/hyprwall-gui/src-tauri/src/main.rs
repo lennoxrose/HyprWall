@@ -20,6 +20,7 @@ fn main() {
     tauri::Builder::default()
         .manage(commands::library_watch::WatcherState::default())
         .invoke_handler(tauri::generate_handler![
+            commands::audio_probe::has_audio_track,
             commands::config::get_library_folders,
             commands::config::set_library_folders,
             commands::library::scan_library,
@@ -32,6 +33,8 @@ fn main() {
             commands::service::get_background_service_enabled,
             commands::service::set_background_service_enabled,
             commands::snapshot::capture_monitor_snapshot,
+            commands::wallpaper_settings::get_wallpaper_settings,
+            commands::wallpaper_settings::set_wallpaper_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running hyprwall-gui");

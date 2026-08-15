@@ -44,7 +44,7 @@ function Slider({
   onChange: (value: number) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(() => String(value));
+  const [draft, setDraft] = useState(() => value.toFixed(2));
 
   const commit = () => {
     const parsed = Number(draft);
@@ -78,7 +78,7 @@ function Slider({
           <span
             style={{ opacity: 0.7, cursor: "text" }}
             onClick={() => {
-              setDraft(String(value));
+              setDraft(value.toFixed(2));
               setEditing(true);
             }}
           >

@@ -1,10 +1,5 @@
 use std::os::unix::net::{UnixListener, UnixStream};
-use std::path::{Path, PathBuf};
-
-pub fn socket_path() -> PathBuf {
-    let runtime_dir = std::env::var("XDG_RUNTIME_DIR").expect("XDG_RUNTIME_DIR is not set");
-    PathBuf::from(runtime_dir).join("hyprwall.sock")
-}
+use std::path::Path;
 
 /// Binds the daemon's control socket. If a socket file already exists but
 /// nothing is listening on it (stale, e.g. from a crash), it's removed and

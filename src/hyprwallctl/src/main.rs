@@ -1,7 +1,3 @@
-mod client;
-
-use std::path::PathBuf;
-
 use clap::{Parser, Subcommand};
 use hyprwall_ipc::{Command, parse_response, Response};
 
@@ -22,11 +18,6 @@ enum CliCommand {
     Get { monitor: String },
 }
 
-fn socket_path() -> PathBuf {
-    let runtime_dir = std::env::var("XDG_RUNTIME_DIR").expect("XDG_RUNTIME_DIR is not set");
-    PathBuf::from(runtime_dir).join("hyprwall.sock")
-}
-
 fn main() {
     let cli = Cli::parse();
     let command = match cli.command {
@@ -40,7 +31,7 @@ fn main() {
         CliCommand::Get { monitor } => Command::Get { monitor },
     };
 
-    match client::send(&socket_path(), &command) {
+    match hyprwall_ipc::client::send(&hyprwall_ipc::default_socket_path(), &command) {
         Ok(response) => {
             match parse_response(&response) {
                 Response::Error(msg) => {

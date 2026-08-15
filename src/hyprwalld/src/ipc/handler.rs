@@ -1,4 +1,4 @@
-use hyprwall_ipc::{Command, Response};
+use hyprwall_ipc::{Command, MonitorInfo, Response};
 
 use crate::app::AppState;
 use hyprwall_config::model::{Config, ZoneConfig};
@@ -16,7 +16,17 @@ use crate::zone_manager::ZoneError;
 /// still runs.
 pub fn handle_command(state: &mut AppState, cmd: Command, render: &mut RenderResources) -> Response {
     match cmd {
-        Command::MonitorList => Response::MonitorList(state.registry.names()),
+        Command::MonitorList => Response::MonitorList(
+            state
+                .registry
+                .names()
+                .into_iter()
+                .filter_map(|name| {
+                    let m = state.registry.get(&name)?;
+                    Some(MonitorInfo { name: m.name.clone(), x: m.logical.x, y: m.logical.y, w: m.logical.w, h: m.logical.h })
+                })
+                .collect(),
+        ),
         Command::Get { monitor } => match state.zones.path_for_monitor(&monitor) {
             Some(path) => Response::Path(path.to_string()),
             None => Response::Error(format!("no wallpaper set for {monitor}")),
@@ -116,7 +126,13 @@ mod tests {
         let mut state = state_with(&["eDP-1", "HDMI-A-1"]);
         let mut render = RenderResources::new_headless_for_test();
         let resp = handle_command(&mut state, Command::MonitorList, &mut render);
-        assert_eq!(resp, Response::MonitorList(vec!["HDMI-A-1".to_string(), "eDP-1".to_string()]));
+        assert_eq!(
+            resp,
+            Response::MonitorList(vec![
+                MonitorInfo { name: "HDMI-A-1".to_string(), x: 1920, y: 0, w: 1920, h: 1080 },
+                MonitorInfo { name: "eDP-1".to_string(), x: 0, y: 0, w: 1920, h: 1080 },
+            ])
+        );
     }
 
     #[test]

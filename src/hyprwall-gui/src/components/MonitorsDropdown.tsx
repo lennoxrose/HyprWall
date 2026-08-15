@@ -61,6 +61,14 @@ export function MonitorsDropdown({ open, monitors, selected, onToggle, onClose, 
           left: "50%",
           zIndex: 20,
           minWidth: 420,
+          // Pre-promotes this element to its own compositing layer before
+          // any transition ever runs. Without it, WebKit only promotes a
+          // transformed element to a layer the first time a transform
+          // transition actually starts -- that promotion happens mid-
+          // animation, which is what caused the very first open to visibly
+          // jank through most of its duration while every animation after
+          // (including every close) was already on a layer and ran smooth.
+          willChange: "transform",
           transform: `translateX(-50%) translateY(${open ? "0" : "-100%"})`,
           transition: `transform ${DROPDOWN_ANIM_MS}ms ${DROPDOWN_EASING}`,
         }}

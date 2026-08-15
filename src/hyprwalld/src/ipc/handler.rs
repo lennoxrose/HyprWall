@@ -131,11 +131,16 @@ fn persist(state: &AppState) {
             Some(ZoneConfig { monitors: zone.monitors.clone(), path: zone.path.clone()? })
         })
         .collect();
-    // `library_paths` is hyprwall-gui's field, not hyprwalld's -- hyprwalld
-    // only ever writes zones, so it must carry the existing value through
-    // rather than defaulting it away on every zone save.
-    let library_paths = store::load(&state.config_path).unwrap_or_default().library_paths;
-    let _ = store::save(&state.config_path, &Config { zones, library_paths });
+    // `library_paths` and `wallpaper_settings` are written elsewhere
+    // (`library_paths` by hyprwall-gui, `wallpaper_settings` by
+    // `persist_wallpaper_settings` below) -- this function only ever
+    // rebuilds `zones`, so both must carry their existing values through
+    // rather than being defaulted away on every zone save.
+    let existing = store::load(&state.config_path).unwrap_or_default();
+    let _ = store::save(
+        &state.config_path,
+        &Config { zones, library_paths: existing.library_paths, wallpaper_settings: existing.wallpaper_settings },
+    );
 }
 
 #[cfg(test)]

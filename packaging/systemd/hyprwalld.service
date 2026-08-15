@@ -1,0 +1,12 @@
+[Unit]
+Description=HyprWall daemon
+Requires=hyprwalld.socket
+After=hyprwalld.socket graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/hyprwalld
+Type=simple
+
+[Install]
+Also=hyprwalld.socket

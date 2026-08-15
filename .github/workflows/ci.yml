@@ -38,6 +38,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libmpv-dev libegl1-mesa-dev libwayland-dev \
             libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: src/hyprwall-gui/package-lock.json
+      # hyprwall-gui's custom-protocol feature (on by default -- see its
+      # Cargo.toml) makes tauri::generate_context!() embed build.frontendDist
+      # at compile time, so it must exist before *any* cargo command touches
+      # that crate, clippy included -- not just build-and-test's real build.
+      - name: npm ci && npm run build
+        working-directory: src/hyprwall-gui
+        run: |
+          npm ci
+          npm run build
       - run: cargo clippy --workspace --all-targets -- -D warnings
 
   # Known RustSec advisories in the dependency tree fail the build outright

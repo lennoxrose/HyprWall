@@ -100,9 +100,18 @@ fn main() -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!("failed to insert wayland source into event loop: {}", e.error))?;
 
     let socket_path = hyprwall_ipc::default_socket_path();
-    let listener = ipc::socket::bind_listener(&socket_path)?;
+    let listener = match ipc::systemd_activation::take_listener() {
+        Some(listener) => {
+            println!("hyprwalld listening on {} (socket-activated)", socket_path.display());
+            listener
+        }
+        None => {
+            let listener = ipc::socket::bind_listener(&socket_path)?;
+            println!("hyprwalld listening on {}", socket_path.display());
+            listener
+        }
+    };
     listener.set_nonblocking(true)?;
-    println!("hyprwalld listening on {}", socket_path.display());
 
     loop_handle
         .insert_source(

@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { open } from "@tauri-apps/plugin-shell";
 
 const REPO_OWNER = "lennoxrose";
 const REPO_NAME = "HyprWall";
+const REPO_URL = `https://github.com/${REPO_OWNER}/${REPO_NAME}`;
 
 const CACHE_KEY = "hyprwall-credits-cache";
 const CACHE_TTL_MS = 10 * 60 * 1000;
@@ -49,36 +51,51 @@ const AVATAR_STYLE = {
   border: "1px solid #333",
 };
 
+function ContributeLink() {
+  return (
+    <button
+      onClick={() => open(REPO_URL).catch(() => {})}
+      style={{
+        background: "transparent",
+        border: "1px solid #4ade80",
+        borderRadius: 6,
+        padding: "6px 14px",
+        fontSize: 12,
+        fontWeight: 600,
+        color: "#4ade80",
+        cursor: "pointer",
+      }}
+    >
+      I want to Contribute
+    </button>
+  );
+}
+
 /** Credits tab content: the repo owner (fetched from the repo's own `owner`
  * field rather than hardcoded, so it stays correct if that ever changes)
- * plus everyone GitHub's contributors API knows about, sorted by commit
+ * plus everyone else GitHub's contributors API knows about (the owner is
+ * excluded from that list -- they're already the header), sorted by commit
  * count. Entirely self-contained -- this is the one place in the app that
  * makes a network call (public, unauthenticated GitHub API), and a failure
  * here only empties this one tab, never anything else. Results are cached
  * for 10 minutes (see `readCache`/`writeCache`) so opening this tab
- * repeatedly doesn't hammer GitHub's API; "Refresh" bypasses that cache on
- * demand. */
+ * repeatedly doesn't hammer GitHub's API. */
 export function CreditsPanel() {
   const [owner, setOwner] = useState<GitHubUser | null>(null);
   const [contributors, setContributors] = useState<GitHubUser[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const load = (force: boolean) => {
-    if (!force) {
-      const cached = readCache();
-      if (cached) {
-        setOwner(cached.owner);
-        setContributors(cached.contributors);
-        setError(null);
-        setLoading(false);
-        return () => {};
-      }
+  useEffect(() => {
+    const cached = readCache();
+    if (cached) {
+      setOwner(cached.owner);
+      setContributors(cached.contributors);
+      setLoading(false);
+      return;
     }
 
     let cancelled = false;
-    setLoading(true);
-    setError(null);
 
     const fetchJson = (path: string) =>
       fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}${path}`).then((res) => {
@@ -105,67 +122,52 @@ export function CreditsPanel() {
     return () => {
       cancelled = true;
     };
-  };
-
-  useEffect(() => {
-    const cancel = load(false);
-    return cancel;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  if (loading) {
+    return <p style={{ fontSize: 13, color: "#888" }}>loading credits...</p>;
+  }
+
+  if (error) {
+    return (
+      <p style={{ fontSize: 13, color: "#f87171" }} role="alert">
+        couldn't reach GitHub to load credits: {error}
+      </p>
+    );
+  }
+
+  const otherContributors = contributors.filter((c) => c.login !== owner?.login);
+  const hasContributors = otherContributors.length > 0;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button
-          onClick={() => load(true)}
-          disabled={loading}
-          style={{
-            background: "transparent",
-            border: "1px solid #333",
-            borderRadius: 6,
-            padding: "4px 10px",
-            fontSize: 11,
-            color: "#999",
-            cursor: loading ? "default" : "pointer",
-          }}
-        >
-          Refresh
-        </button>
-      </div>
-
-      {loading && <p style={{ fontSize: 13, color: "#888" }}>loading credits...</p>}
-
-      {error && (
-        <p style={{ fontSize: 13, color: "#f87171" }} role="alert">
-          couldn't reach GitHub to load credits: {error}
-        </p>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {owner && (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+          <img src={owner.avatar_url} alt={owner.login} style={{ ...AVATAR_STYLE, width: 72, height: 72 }} />
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>{owner.login}</div>
+          <div style={{ fontSize: 11, color: "#666" }}>Creator of HyprWall</div>
+        </div>
       )}
 
-      {!loading && !error && (
-        <>
-          {owner && (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-              <img src={owner.avatar_url} alt={owner.login} style={{ ...AVATAR_STYLE, width: 72, height: 72 }} />
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>{owner.login}</div>
-              <div style={{ fontSize: 11, color: "#666" }}>Creator of HyprWall</div>
-            </div>
-          )}
+      <div>
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: "#888",
+            marginBottom: 8,
+            textTransform: "uppercase",
+            letterSpacing: 0.5,
+            textAlign: "center",
+          }}
+        >
+          Thanks to everyone who's contributed
+        </div>
 
-          <div>
-            <div
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: "#888",
-                marginBottom: 8,
-                textTransform: "uppercase",
-                letterSpacing: 0.5,
-              }}
-            >
-              Thanks to everyone who's contributed
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-              {contributors.map((c) => (
+        {hasContributors ? (
+          <>
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 12 }}>
+              {otherContributors.map((c) => (
                 <div
                   key={c.login}
                   title={`${c.login} -- ${c.contributions ?? 0} commit${c.contributions === 1 ? "" : "s"}`}
@@ -188,9 +190,17 @@ export function CreditsPanel() {
                 </div>
               ))}
             </div>
+            <div style={{ display: "flex", justifyContent: "center", marginTop: 20 }}>
+              <ContributeLink />
+            </div>
+          </>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+            <p style={{ fontSize: 12, color: "#666", margin: 0 }}>Sadly no Contributors here yet</p>
+            <ContributeLink />
           </div>
-        </>
-      )}
+        )}
+      </div>
     </div>
   );
 }

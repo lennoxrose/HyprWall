@@ -18,6 +18,7 @@ fn main() {
     unsafe { libc::setlocale(libc::LC_NUMERIC, c"C".as_ptr()) };
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
         .manage(commands::library_watch::WatcherState::default())
         .invoke_handler(tauri::generate_handler![
             commands::audio_probe::has_audio_track,

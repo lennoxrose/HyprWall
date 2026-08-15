@@ -53,6 +53,7 @@ mod tests {
             ],
             library_paths: vec![],
             wallpaper_settings: Default::default(),
+            default_fit: Default::default(),
         };
         save(&path, &cfg).unwrap();
         let loaded = load(&path).unwrap();
@@ -67,6 +68,7 @@ mod tests {
             zones: vec![],
             library_paths: vec!["/home/u/Videos/wallpapers".to_string()],
             wallpaper_settings: Default::default(),
+            default_fit: Default::default(),
         };
         save(&path, &cfg).unwrap();
         let loaded = load(&path).unwrap();

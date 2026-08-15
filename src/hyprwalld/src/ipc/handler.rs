@@ -140,23 +140,36 @@ fn persist(state: &AppState) {
             Some(ZoneConfig { monitors: zone.monitors.clone(), path: zone.path.clone()? })
         })
         .collect();
-    // `library_paths` and `wallpaper_settings` are written elsewhere
-    // (`library_paths` by hyprwall-gui, `wallpaper_settings` by
-    // `persist_wallpaper_settings` below) -- this function only ever
-    // rebuilds `zones`, so both must carry their existing values through
-    // rather than being defaulted away on every zone save.
+    // `library_paths`, `wallpaper_settings`, and `default_fit` are all
+    // written elsewhere (`library_paths`/`default_fit` by hyprwall-gui,
+    // `wallpaper_settings` by `persist_wallpaper_settings` below) -- this
+    // function only ever rebuilds `zones`, so all three must carry their
+    // existing values through rather than being defaulted away on every
+    // zone save.
     let existing = store::load(&state.config_path).unwrap_or_default();
     let _ = store::save(
         &state.config_path,
-        &Config { zones, library_paths: existing.library_paths, wallpaper_settings: existing.wallpaper_settings },
+        &Config {
+            zones,
+            library_paths: existing.library_paths,
+            wallpaper_settings: existing.wallpaper_settings,
+            default_fit: existing.default_fit,
+        },
     );
 }
 
+/// The picture's saved settings if it has any, or `WallpaperSettings::
+/// default()` seeded with the config's `default_fit` if not -- so a
+/// picture assigned for the first time, before anyone's touched its
+/// sidebar, still respects whatever fit the user picked as their default
+/// instead of always landing on `WallpaperSettings::default()`'s own
+/// `Cover`.
 fn load_wallpaper_settings(config_path: &std::path::Path, path: &str) -> WallpaperSettings {
-    store::load(config_path)
-        .ok()
-        .and_then(|cfg| cfg.wallpaper_settings.get(path).copied())
-        .unwrap_or_default()
+    let cfg = store::load(config_path).unwrap_or_default();
+    cfg.wallpaper_settings
+        .get(path)
+        .copied()
+        .unwrap_or(WallpaperSettings { fit: cfg.default_fit, ..WallpaperSettings::default() })
 }
 
 fn persist_wallpaper_settings(state: &AppState, path: &str, settings: WallpaperSettings) {
@@ -561,5 +574,34 @@ mod tests {
         apply_zone(&mut state, &mut render, &["eDP-1".to_string()], "/a.jpg").unwrap();
 
         assert_eq!(state.zones.path_for_monitor("eDP-1"), Some("/a.jpg"));
+    }
+
+    #[test]
+    fn load_wallpaper_settings_falls_back_to_configured_default_fit() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config.toml");
+        let mut cfg = store::load(&config_path).unwrap();
+        cfg.default_fit = hyprwall_config::model::FitMode::Stretch;
+        store::save(&config_path, &cfg).unwrap();
+
+        let settings = load_wallpaper_settings(&config_path, "/never-configured.jpg");
+        assert_eq!(settings.fit, hyprwall_config::model::FitMode::Stretch);
+        assert_eq!(settings.zoom, 1.0, "every other field still comes from WallpaperSettings::default()");
+    }
+
+    #[test]
+    fn load_wallpaper_settings_prefers_a_saved_entry_over_the_default_fit() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("config.toml");
+        let mut cfg = store::load(&config_path).unwrap();
+        cfg.default_fit = hyprwall_config::model::FitMode::Stretch;
+        cfg.wallpaper_settings.insert(
+            "/a.jpg".to_string(),
+            WallpaperSettings { fit: hyprwall_config::model::FitMode::Contain, ..WallpaperSettings::default() },
+        );
+        store::save(&config_path, &cfg).unwrap();
+
+        let settings = load_wallpaper_settings(&config_path, "/a.jpg");
+        assert_eq!(settings.fit, hyprwall_config::model::FitMode::Contain);
     }
 }

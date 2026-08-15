@@ -24,7 +24,6 @@ export default function App() {
   const [monitors, setMonitors] = useState<MonitorState[]>([]);
   const [wallpapers, setWallpapers] = useState<WallpaperEntry[]>([]);
   const [folders, setFolders] = useState<string[]>([]);
-  const [libraryPath, setLibraryPath] = useState("");
   const [daemonDown, setDaemonDown] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [monitorsOpen, setMonitorsOpen] = useState(false);
@@ -105,12 +104,19 @@ export default function App() {
     }
   };
 
-  // Single library path -- whatever's currently in the input is what gets
-  // stored, replacing any previous path outright (no add/remove list).
-  const saveLibraryPath = () =>
+  // Multiple library folders are scanned together (already true on the
+  // backend -- `scan_library` always accepted a list); these just add/
+  // remove one entry from that list rather than overwriting it outright.
+  const addLibraryFolder = (path: string) =>
     runAction(async () => {
-      const trimmed = libraryPath.trim();
-      await setLibraryFolders(trimmed ? [trimmed] : []);
+      const trimmed = path.trim();
+      if (!trimmed || folders.includes(trimmed)) return;
+      await setLibraryFolders([...folders, trimmed]);
+    });
+
+  const removeLibraryFolder = (path: string) =>
+    runAction(async () => {
+      await setLibraryFolders(folders.filter((f) => f !== path));
     });
 
   // Auto-saves as soon as a wallpaper is picked -- no separate "Assign"
@@ -190,17 +196,14 @@ export default function App() {
       <TitleBar
         monitorsOpen={monitorsOpen}
         onToggleMonitors={() => setMonitorsOpen((o) => !o)}
-        onOpenSettings={() => {
-          setLibraryPath(folders[0] ?? "");
-          setSettingsOpen(true);
-        }}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-        libraryPath={libraryPath}
-        onLibraryPathChange={setLibraryPath}
-        onSaveLibraryPath={saveLibraryPath}
+        libraryFolders={folders}
+        onAddLibraryFolder={addLibraryFolder}
+        onRemoveLibraryFolder={removeLibraryFolder}
       />
       <MonitorsDropdown
         open={monitorsOpen}

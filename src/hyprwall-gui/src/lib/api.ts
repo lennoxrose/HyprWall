@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { MonitorState, WallpaperEntry, WallpaperSettings } from "./types";
+import type { FitMode, MonitorState, WallpaperEntry, WallpaperSettings } from "./types";
 
 export class DaemonUnreachableError extends Error {}
 
@@ -29,6 +29,10 @@ export const playWallpaper = (monitor: string) => call<void>("play_wallpaper", {
 export const getLibraryFolders = () => call<string[]>("get_library_folders");
 
 export const setLibraryFolders = (folders: string[]) => call<void>("set_library_folders", { folders });
+
+export const getDefaultFitMode = () => call<FitMode>("get_default_fit_mode");
+
+export const setDefaultFitMode = (fit: FitMode) => call<void>("set_default_fit_mode", { fit });
 
 export const scanLibrary = (folders: string[]) => call<WallpaperEntry[]>("scan_library", { folders });
 

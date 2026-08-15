@@ -10,6 +10,11 @@ pub struct Config {
     pub library_paths: Vec<String>,
     #[serde(default)]
     pub wallpaper_settings: HashMap<String, WallpaperSettings>,
+    /// What `fit` a picture gets the first time it's assigned, before
+    /// anyone's opened its sidebar and saved a `WallpaperSettings` entry
+    /// for it. Doesn't touch already-configured pictures.
+    #[serde(default)]
+    pub default_fit: FitMode,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -103,6 +108,17 @@ mod tests {
         assert_eq!(parsed.zoom, 1.0, "zoom's default is 1.0, not f64's own 0.0 default");
         assert_eq!(parsed.brightness, 20.0);
         assert_eq!(parsed.fit, FitMode::Cover);
+    }
+
+    #[test]
+    fn config_default_fit_defaults_to_cover_and_round_trips() {
+        let mut cfg = Config::default();
+        assert_eq!(cfg.default_fit, FitMode::Cover);
+
+        cfg.default_fit = FitMode::Contain;
+        let text = toml::to_string_pretty(&cfg).unwrap();
+        let round_tripped: Config = toml::from_str(&text).unwrap();
+        assert_eq!(round_tripped.default_fit, FitMode::Contain);
     }
 
     #[test]

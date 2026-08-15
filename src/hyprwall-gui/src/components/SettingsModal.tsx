@@ -109,7 +109,7 @@ export function SettingsModal({
           {category === "system" && (
             <>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: 5 }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: "#bbb" }}>Image Library Folder</span>
+                <span style={{ fontSize: 13, fontWeight: 500, color: "#bbb" }}>Media Library Folder</span>
                 <input
                   className="settings-input"
                   style={{ width: 500 }}

@@ -11,7 +11,7 @@
   },
   "app": {
     "windows": [
-      { "title": "HyprWall", "width": 1000, "height": 700 }
+      { "title": "HyprWall", "width": 1000, "height": 700, "center": true, "resizable": true }
     ],
     "security": {
       "assetProtocol": {

@@ -58,14 +58,14 @@ function Slider({
         <span>{label}</span>
         {editing ? (
           <input
-            className="settings-input"
+            className="settings-input no-spinner"
             type="number"
             autoFocus
             value={draft}
             min={min}
             max={max}
             step={step}
-            style={{ width: 64, padding: "2px 6px", fontSize: 11 }}
+            style={{ width: 64, padding: "2px 6px", fontSize: 11, border: "1px solid #fff" }}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commit}
             onKeyDown={(e) => {

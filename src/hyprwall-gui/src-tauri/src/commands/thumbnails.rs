@@ -52,7 +52,15 @@ fn ensure_thumbnail_in(cache_dir: &Path, path: &str, kind: WallpaperKind) -> any
 /// with no window, GL context, or `screenshot` command involved. Verified
 /// against the installed mpv (0.41.0):
 /// `mpv --vo=image --vo-image-outdir=<dir> --vo-image-format=png --frames=1
-/// --start=1 --ao=null <file>` writes `<dir>/00000001.png`.
+/// --start=1 --vf=scale=320:-2 --ao=null <file>` writes `<dir>/00000001.png`.
+///
+/// The `scale` filter is load-bearing, not cosmetic: without it, a
+/// full-resolution source (an 8K wallpaper photo, easily 7952x5304) makes
+/// mpv encode and write a 60+MB PNG, which took ~7.7s on real hardware --
+/// past `wait_for_stable_file`'s 5s deadline, so every large image in a
+/// real photo library timed out. Downscaling first also produces a file
+/// actually sized for the ~140px-wide grid cell this is rendered into
+/// (`LibraryGrid.tsx`).
 fn generate_thumbnail(path: &str, dest: &Path, kind: WallpaperKind) -> anyhow::Result<()> {
     let work_dir = tempfile::tempdir()?;
     let outdir = work_dir.path().to_string_lossy().into_owned();
@@ -68,6 +76,7 @@ fn generate_thumbnail(path: &str, dest: &Path, kind: WallpaperKind) -> anyhow::R
         init.set_option("vo-image-outdir", outdir.as_str())?;
         init.set_option("vo-image-format", "png")?;
         init.set_option("frames", "1")?;
+        init.set_option("vf", "scale=320:-2")?;
         if kind == WallpaperKind::Video {
             // Skip a video's black intro frame. A still image has no
             // guaranteed second of content to seek into, so this is

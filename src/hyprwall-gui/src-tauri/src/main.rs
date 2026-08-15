@@ -32,6 +32,8 @@ fn main() {
             commands::monitors::play_wallpaper,
             commands::service::get_background_service_enabled,
             commands::service::set_background_service_enabled,
+            commands::service::get_start_on_login_enabled,
+            commands::service::set_start_on_login_enabled,
             commands::snapshot::capture_monitor_snapshot,
             commands::wallpaper_settings::get_wallpaper_settings,
             commands::wallpaper_settings::set_wallpaper_settings,

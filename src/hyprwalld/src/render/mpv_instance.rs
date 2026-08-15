@@ -83,6 +83,13 @@ impl MpvInstance {
             // frame's scheduled display time, which would stall every *other*
             // zone rendered from the same thread.
             init.set_option("video-timing-offset", "0")?;
+            // A still image (one video frame, no audio) hits EOF after mpv's
+            // default display duration; `loop-file=inf` above would then
+            // restart it forever, producing a perpetual wakeup-ping/redraw
+            // cycle for a picture that never changes. This option only
+            // applies to files mpv classifies as a still image -- video
+            // files and animated gif/webp are unaffected.
+            init.set_option("image-display-duration", "inf")?;
             Ok(())
         })?);
 

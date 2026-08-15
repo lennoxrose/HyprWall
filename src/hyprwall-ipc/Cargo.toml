@@ -1,0 +1,10 @@
+[package]
+name = "hyprwall-ipc"
+version.workspace = true
+edition = "2021"
+
+[dependencies]
+hyprwall-config = { path = "../hyprwall-config" }
+
+[dev-dependencies]
+tempfile = "3.27.0"

@@ -1,0 +1,45 @@
+# Maintainer: Lennox Rose <lennoxdethloff@gmail.com>
+pkgname=hyprwall-git
+pkgver=r1.0000000
+pkgrel=1
+pkgdesc="Local-video and image wallpaper daemon for Hyprland, with a GUI"
+arch=('x86_64')
+url="https://github.com/lennoxrose/HyprWall"
+license=('MIT')
+depends=('mpv' 'wayland' 'mesa' 'gtk3' 'webkit2gtk-4.1' 'libappindicator-gtk3' 'librsvg')
+makedepends=('rust' 'nodejs' 'npm' 'git')
+provides=('hyprwall')
+conflicts=('hyprwall')
+source=("hyprwall::git+https://github.com/lennoxrose/HyprWall.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$srcdir/hyprwall"
+  printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+  cd "$srcdir/hyprwall/src/hyprwall-gui"
+  npm ci
+  npm run build
+
+  cd "$srcdir/hyprwall"
+  cargo build --release --workspace
+}
+
+package() {
+  cd "$srcdir/hyprwall"
+
+  install -Dm755 target/release/hyprwalld "$pkgdir/usr/bin/hyprwalld"
+  install -Dm755 target/release/hyprwallctl "$pkgdir/usr/bin/hyprwallctl"
+  install -Dm755 target/release/hyprwall-gui "$pkgdir/usr/bin/hyprwall-gui"
+
+  install -Dm644 packaging/hyprwall-gui.desktop "$pkgdir/usr/share/applications/hyprwall-gui.desktop"
+  install -Dm644 src/hyprwall-gui/src-tauri/icons/icon.png \
+    "$pkgdir/usr/share/icons/hicolor/256x256/apps/hyprwall.png"
+
+  install -Dm644 packaging/systemd/hyprwalld.socket \
+    "$pkgdir/usr/lib/systemd/user/hyprwalld.socket"
+  install -Dm644 packaging/systemd/hyprwalld.service \
+    "$pkgdir/usr/lib/systemd/user/hyprwalld.service"
+}

@@ -1,0 +1,9 @@
+[Unit]
+Description=HyprWall daemon control socket
+
+[Socket]
+ListenStream=%t/hyprwall.sock
+RemoveOnStop=true
+
+[Install]
+WantedBy=default.target

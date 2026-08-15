@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, staging, master]
+  pull_request:
+    branches: [dev, staging, master]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Rejects anything `cargo fmt` would reformat -- no style bikeshedding in
+  # review, no "oops, unformatted" commits reaching dev.
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  # `-D warnings` promotes every clippy lint to a hard failure -- a clean
+  # `cargo build` alone still lets real bugs (needless clones, suspicious
+  # comparisons, etc.) through silently; this is the check that actually
+  # catches them.
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Install system dependencies (Wayland/EGL/mpv/Tauri)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libmpv-dev libegl1-mesa-dev libwayland-dev \
+            libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: src/hyprwall-gui/package-lock.json
+      # hyprwall-gui's custom-protocol feature (on by default -- see its
+      # Cargo.toml) makes tauri::generate_context!() embed build.frontendDist
+      # at compile time, so it must exist before *any* cargo command touches
+      # that crate, clippy included -- not just build-and-test's real build.
+      - name: npm ci && npm run build
+        working-directory: src/hyprwall-gui
+        run: |
+          npm ci
+          npm run build
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  # Known RustSec advisories in the dependency tree fail the build outright
+  # -- "it compiles" isn't the same as "it's safe to ship." `checks: write`
+  # is load-bearing, not decoration: the action posts its findings as a
+  # check-run annotation, which the default GITHUB_TOKEN can't do without
+  # it -- confirmed the hard way (a real "Resource not accessible by
+  # integration" failure on dev after this workflow's first merge).
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  # `src/hyprwall-gui/package.json`'s version has no automatic link to the
+  # workspace version (npm has no such inheritance) -- this is what keeps
+  # it from silently drifting instead of a script quietly "fixing" it.
+  version-consistency:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: package.json version must match the workspace Cargo.toml version
+        run: |
+          CARGO_VERSION=$(grep -m1 '^version' Cargo.toml | sed -E 's/version = "(.*)"/\1/')
+          PKG_VERSION=$(node -p "require('./src/hyprwall-gui/package.json').version")
+          echo "Cargo.toml: $CARGO_VERSION -- package.json: $PKG_VERSION"
+          if [ "$CARGO_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::package.json version ($PKG_VERSION) does not match Cargo.toml version ($CARGO_VERSION) -- bump both together."
+            exit 1
+          fi
+
+  # The real build: frontend first (`generate_context!()` embeds `dist/` at
+  # compile time, so the Rust build fails outright without it -- this also
+  # doubles as the frontend's own typecheck, since `npm run build` runs
+  # `tsc` before `vite build`), then the full workspace build + test suite.
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install system dependencies (Wayland/EGL/mpv/Tauri)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libmpv-dev libegl1-mesa-dev libwayland-dev \
+            libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: src/hyprwall-gui/package-lock.json
+      - name: npm ci
+        working-directory: src/hyprwall-gui
+        run: npm ci
+      - name: npm run build
+        working-directory: src/hyprwall-gui
+        run: npm run build
+      - name: cargo build
+        run: cargo build --workspace --verbose
+      - name: cargo test
+        run: cargo test --workspace --verbose

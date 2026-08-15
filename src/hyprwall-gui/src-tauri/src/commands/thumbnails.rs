@@ -3,7 +3,8 @@ use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use libmpv2::Mpv;
+use libmpv2::events::Event;
+use libmpv2::{Mpv, mpv_end_file_reason};
 
 use crate::commands::library::WallpaperKind;
 
@@ -88,6 +89,7 @@ fn generate_thumbnail(path: &str, dest: &Path, kind: WallpaperKind) -> anyhow::R
         Ok(())
     })?;
     mpv.command("loadfile", &[path, "replace"])?;
+    wait_for_load(&mpv, path)?;
 
     let produced = work_dir.path().join("00000001.png");
     wait_for_stable_file(&produced, path)?;
@@ -100,15 +102,46 @@ fn generate_thumbnail(path: &str, dest: &Path, kind: WallpaperKind) -> anyhow::R
     Ok(())
 }
 
+/// Blocks until mpv finishes loading `path` (successfully or not), instead
+/// of relying purely on `wait_for_stable_file`'s filesystem polling. A file
+/// mpv can't decode at all -- a broken download saved with an image
+/// extension but actually containing an HTML error page, which really
+/// happened in a real wallpaper folder -- never produces an output file, so
+/// blind polling burned its *entire* deadline on every such file; with a
+/// handful of them in a library, and the library watcher re-triggering the
+/// scan, that compounded into an unresponsive GUI. mpv reports the failure
+/// via an `EndFile` event within milliseconds; this surfaces it immediately
+/// instead of waiting it out.
+fn wait_for_load(mpv: &Mpv, path: &str) -> anyhow::Result<()> {
+    loop {
+        match mpv.wait_event(5.0) {
+            Some(Ok(Event::EndFile(reason))) => {
+                if reason == mpv_end_file_reason::Error {
+                    anyhow::bail!("mpv failed to decode {path}");
+                }
+                return Ok(());
+            }
+            // StartFile/FileLoaded/VideoReconfig/etc -- not the terminal
+            // event, keep waiting for EndFile.
+            Some(Ok(_)) => continue,
+            Some(Err(e)) => anyhow::bail!("mpv event error while loading {path}: {e}"),
+            None => anyhow::bail!("timed out waiting for mpv to finish loading {path}"),
+        }
+    }
+}
+
 /// mpv's `vo=image` creates the output file before it finishes writing the
 /// PNG's contents to it -- `path.exists()` alone becomes true well before
 /// the encoded bytes are actually there, which showed up in practice as a
 /// real thumbnail cached as a 0-byte file. Waits for the file to exist AND
 /// hold a nonzero, unchanging size across two consecutive polls, which is
 /// as close to "the write finished" as polling the filesystem gets without
-/// an mpv-side completion signal for this VO.
+/// an mpv-side completion signal for this VO. By the time this runs,
+/// `wait_for_load` has already confirmed mpv finished decoding, so the
+/// deadline here only needs to cover the tail of a disk write, not a full
+/// decode -- 2s, not 5s.
 fn wait_for_stable_file(path: &Path, video_path: &str) -> anyhow::Result<()> {
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + Duration::from_secs(2);
     let mut last_len: Option<u64> = None;
     loop {
         if let Ok(metadata) = std::fs::metadata(path) {
@@ -150,6 +183,25 @@ mod tests {
         writer.join().unwrap();
 
         assert!(std::fs::metadata(&path).unwrap().len() > 0);
+    }
+
+    #[test]
+    fn undecodable_file_fails_fast_instead_of_hanging_out_the_deadline() {
+        // Reproduces the real bug: a real wallpaper library had a file
+        // named like a `.jpg` that was actually an HTML error page (a
+        // broken download). mpv can't decode it and says so within
+        // milliseconds, but the old code only polled the filesystem for an
+        // output file that would never appear, burning the full 5s
+        // deadline on every such file before this fix.
+        let cache_root = tempfile::tempdir().unwrap();
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/corrupt.jpg");
+
+        let start = Instant::now();
+        let result = ensure_thumbnail_in(cache_root.path(), path, WallpaperKind::Image);
+        let elapsed = start.elapsed();
+
+        assert!(result.is_err(), "expected an error decoding an HTML file as an image");
+        assert!(elapsed < Duration::from_secs(1), "should fail fast, took {elapsed:?}");
     }
 
     fn fixture_path() -> String {

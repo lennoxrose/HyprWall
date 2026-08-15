@@ -74,13 +74,7 @@ fn generate_thumbnail(video_path: &str, dest: &Path) -> anyhow::Result<()> {
     mpv.command("loadfile", &[video_path, "replace"])?;
 
     let produced = work_dir.path().join("00000001.png");
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while !produced.exists() {
-        if Instant::now() > deadline {
-            anyhow::bail!("timed out waiting for a thumbnail frame from {video_path}");
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    }
+    wait_for_stable_file(&produced, video_path)?;
     // Not `std::fs::rename`: the mpv work dir (under `$TMPDIR`, often tmpfs)
     // and the thumbnail cache dir (`dirs::cache_dir()`) are not guaranteed
     // to be on the same filesystem, and `rename(2)` fails with `EXDEV`
@@ -90,9 +84,57 @@ fn generate_thumbnail(video_path: &str, dest: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// mpv's `vo=image` creates the output file before it finishes writing the
+/// PNG's contents to it -- `path.exists()` alone becomes true well before
+/// the encoded bytes are actually there, which showed up in practice as a
+/// real thumbnail cached as a 0-byte file. Waits for the file to exist AND
+/// hold a nonzero, unchanging size across two consecutive polls, which is
+/// as close to "the write finished" as polling the filesystem gets without
+/// an mpv-side completion signal for this VO.
+fn wait_for_stable_file(path: &Path, video_path: &str) -> anyhow::Result<()> {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut last_len: Option<u64> = None;
+    loop {
+        if let Ok(metadata) = std::fs::metadata(path) {
+            let len = metadata.len();
+            if len > 0 && last_len == Some(len) {
+                return Ok(());
+            }
+            last_len = Some(len);
+        }
+        if Instant::now() > deadline {
+            anyhow::bail!("timed out waiting for a thumbnail frame from {video_path}");
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wait_for_stable_file_does_not_return_on_an_empty_file() {
+        // Reproduces the real bug: mpv creates the output file before it has
+        // written any content to it. If wait_for_stable_file returned as
+        // soon as the path merely existed, this test's later write would
+        // race a copy that already happened -- the caller must see the
+        // *final* nonzero size, not the initial empty one.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("00000001.png");
+        std::fs::write(&path, b"").unwrap(); // file exists, zero bytes, like mpv's initial create
+
+        let path_for_writer = path.clone();
+        let writer = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(150));
+            std::fs::write(&path_for_writer, b"not a real png but nonzero").unwrap();
+        });
+
+        wait_for_stable_file(&path, "irrelevant").unwrap();
+        writer.join().unwrap();
+
+        assert!(std::fs::metadata(&path).unwrap().len() > 0);
+    }
 
     fn fixture_path() -> String {
         concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/sample.mp4").to_string()

@@ -23,6 +23,7 @@ use std::rc::Rc;
 
 use egl_context::{EglCore, MonitorSurface};
 use glow::HasContext;
+use hyprwall_config::model::WallpaperSettings;
 use mpv_instance::MpvInstance;
 use zone_target::ZoneTarget;
 
@@ -134,6 +135,18 @@ impl RenderResources {
     /// triggered dissolve, there is no replacement zone to also set up here.
     pub fn teardown_zone(&mut self, zone_id: u64) {
         self.drop_zone_playback(zone_id);
+    }
+
+    /// Applies `settings` to `zone_id`'s live `MpvInstance`, if it has one
+    /// -- a no-op (besides the log) for a headless test or a zone whose
+    /// `Set` is still pending monitor configuration, same as every other
+    /// GL/mpv call in this file.
+    pub fn apply_wallpaper_settings_to_zone(&mut self, zone_id: u64, settings: &WallpaperSettings) {
+        if let Some(zp) = self.zone_playback.get_mut(&zone_id)
+            && let Err(e) = zp.mpv.apply_wallpaper_settings(settings)
+        {
+            eprintln!("hyprwalld: failed to apply wallpaper settings to zone {zone_id}: {e}");
+        }
     }
 
     /// Clears one monitor's surface to black. Called after `Command::Unset`

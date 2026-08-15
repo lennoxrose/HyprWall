@@ -4,11 +4,9 @@ import { NERD_FONT, TITLEBAR_BLUE } from "./TitleBar";
 interface Props {
   open: boolean;
   onClose: () => void;
-  folders: string[];
-  newFolder: string;
-  onNewFolderChange: (value: string) => void;
-  onAddFolder: () => void;
-  onRemoveFolder: (folder: string) => void;
+  libraryPath: string;
+  onLibraryPathChange: (value: string) => void;
+  onSaveLibraryPath: () => void;
 }
 
 interface Category {
@@ -28,11 +26,9 @@ const BORDER = "1px solid #333";
 export function SettingsModal({
   open,
   onClose,
-  folders,
-  newFolder,
-  onNewFolderChange,
-  onAddFolder,
-  onRemoveFolder,
+  libraryPath,
+  onLibraryPathChange,
+  onSaveLibraryPath,
 }: Props) {
   const [category, setCategory] = useState(CATEGORIES[0].id);
 
@@ -113,25 +109,19 @@ export function SettingsModal({
           {category === "system" && (
             <>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: 5 }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: "#bbb" }}>Image Library Folders</span>
+                <span style={{ fontSize: 13, fontWeight: 500, color: "#bbb" }}>Image Library Folder</span>
                 <input
                   className="settings-input"
-                  style={{ width: 220 }}
-                  value={newFolder}
-                  onChange={(e) => onNewFolderChange(e.target.value)}
+                  style={{ width: 500 }}
+                  value={libraryPath}
+                  onChange={(e) => onLibraryPathChange(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && newFolder.trim()) onAddFolder();
+                    if (e.key === "Enter") onSaveLibraryPath();
                   }}
+                  onBlur={onSaveLibraryPath}
                   placeholder="/absolute/path"
                 />
               </div>
-              <ul style={{ paddingLeft: 18 }}>
-                {folders.map((f) => (
-                  <li key={f}>
-                    {f} <button onClick={() => onRemoveFolder(f)}>Remove</button>
-                  </li>
-                ))}
-              </ul>
             </>
           )}
         </div>

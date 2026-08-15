@@ -4,7 +4,7 @@ use crate::app::AppState;
 use hyprwall_config::model::{Config, ZoneConfig};
 use hyprwall_config::store;
 use crate::render::RenderResources;
-use crate::zone_manager::ZoneError;
+use crate::zone_manager::{ClearOutcome as ZoneClearOutcome, ZoneError};
 
 /// `render` is `&mut` (not pure logic, unlike the rest of this function)
 /// because `Command::Set` may need to create/replace a zone's `MpvInstance`
@@ -23,7 +23,10 @@ pub fn handle_command(state: &mut AppState, cmd: Command, render: &mut RenderRes
                 .into_iter()
                 .filter_map(|name| {
                     let m = state.registry.get(&name)?;
-                    Some(MonitorInfo { name: m.name.clone(), x: m.logical.x, y: m.logical.y, w: m.logical.w, h: m.logical.h })
+                    let mut group: Vec<String> =
+                        state.zones.zone_for_monitor(&name).map(|z| z.monitors.clone()).unwrap_or_default();
+                    group.sort();
+                    Some(MonitorInfo { name: m.name.clone(), x: m.logical.x, y: m.logical.y, w: m.logical.w, h: m.logical.h, group })
                 })
                 .collect(),
         ),
@@ -44,25 +47,35 @@ pub fn handle_command(state: &mut AppState, cmd: Command, render: &mut RenderRes
     }
 }
 
-/// Removes `monitor` from whatever zone currently holds it. If that was the
-/// zone's last monitor, the zone is dissolved and its playback resources
-/// (mpv instance, offscreen render target) are torn down via the exact same
-/// `RenderResources::teardown_zone` a monitor unplug already uses -- an
-/// explicit "remove wallpaper" is the same underlying operation as a
-/// hotplug-triggered removal, just user-initiated instead of Wayland-
-/// initiated. A multi-monitor zone that still has other members afterward
-/// keeps playing to them unaffected (same as unplugging one monitor out of
-/// a multi-monitor zone does).
+/// Clears the wallpaper for `monitor`'s zone. Unlike a monitor unplug, this
+/// is user-initiated and must not split a real (multi-monitor) group apart:
+/// a solo zone is dissolved (nothing left worth keeping), but a group keeps
+/// every member -- it just stops playing -- so picking a wallpaper for the
+/// same members later reforms the exact same group instead of the user
+/// having to re-select monitors from scratch. See `ZoneManager::clear_path`.
 fn handle_unset(state: &mut AppState, render: &mut RenderResources, monitor: &str) -> Response {
-    if state.zones.zone_for_monitor(monitor).is_none() {
-        return Response::Error(format!("no wallpaper set for {monitor}"));
+    match state.zones.clear_path(monitor) {
+        ZoneClearOutcome::NotFound => Response::Error(format!("no wallpaper set for {monitor}")),
+        // The GUI clears a whole group by unsetting each member in turn;
+        // the first call already cleared the (shared) zone path, so later
+        // calls in the same batch are a no-op success, not an error --
+        // otherwise that loop would abort partway through and never refresh.
+        ZoneClearOutcome::AlreadyCleared => Response::Ok,
+        ZoneClearOutcome::Dissolved { zone_id } => {
+            render.teardown_zone(zone_id);
+            render.clear_monitor(monitor);
+            persist(state);
+            Response::Ok
+        }
+        ZoneClearOutcome::Cleared { zone_id, monitors } => {
+            render.teardown_zone(zone_id);
+            for m in &monitors {
+                render.clear_monitor(m);
+            }
+            persist(state);
+            Response::Ok
+        }
     }
-    if let Some(dissolved_zone_id) = state.zones.remove_monitor(monitor) {
-        render.teardown_zone(dissolved_zone_id);
-    }
-    render.clear_monitor(monitor);
-    persist(state);
-    Response::Ok
 }
 
 /// Applies `monitors`/`path` via `ZoneManager::apply_set`, then wires up real
@@ -151,10 +164,55 @@ mod tests {
         assert_eq!(
             resp,
             Response::MonitorList(vec![
-                MonitorInfo { name: "HDMI-A-1".to_string(), x: 1920, y: 0, w: 1920, h: 1080 },
-                MonitorInfo { name: "eDP-1".to_string(), x: 0, y: 0, w: 1920, h: 1080 },
+                MonitorInfo { name: "HDMI-A-1".to_string(), x: 1920, y: 0, w: 1920, h: 1080, group: vec![] },
+                MonitorInfo { name: "eDP-1".to_string(), x: 0, y: 0, w: 1920, h: 1080, group: vec![] },
             ])
         );
+    }
+
+    #[test]
+    fn monitor_list_reports_solo_zone_group_of_self() {
+        let mut state = state_with(&["eDP-1"]);
+        let mut render = RenderResources::new_headless_for_test();
+        handle_command(
+            &mut state,
+            Command::Set { monitors: vec!["eDP-1".to_string()], path: "/a.mp4".to_string() },
+            &mut render,
+        );
+
+        let resp = handle_command(&mut state, Command::MonitorList, &mut render);
+        assert_eq!(
+            resp,
+            Response::MonitorList(vec![MonitorInfo {
+                name: "eDP-1".to_string(),
+                x: 0,
+                y: 0,
+                w: 1920,
+                h: 1080,
+                group: vec!["eDP-1".to_string()],
+            }])
+        );
+    }
+
+    #[test]
+    fn monitor_list_reports_shared_group_for_a_multi_monitor_zone() {
+        let mut state = state_with(&["eDP-1", "HDMI-A-1"]);
+        let mut render = RenderResources::new_headless_for_test();
+        handle_command(
+            &mut state,
+            Command::Set {
+                monitors: vec!["eDP-1".to_string(), "HDMI-A-1".to_string()],
+                path: "/pano.mp4".to_string(),
+            },
+            &mut render,
+        );
+
+        let resp = handle_command(&mut state, Command::MonitorList, &mut render);
+        let Response::MonitorList(infos) = resp else { panic!("expected MonitorList") };
+        let expected_group = vec!["HDMI-A-1".to_string(), "eDP-1".to_string()];
+        for info in &infos {
+            assert_eq!(info.group, expected_group, "monitor {} should list both zone members sorted", info.name);
+        }
     }
 
     #[test]
@@ -239,7 +297,7 @@ mod tests {
     }
 
     #[test]
-    fn unset_on_one_monitor_of_a_group_leaves_the_other_playing() {
+    fn unset_on_one_monitor_of_a_group_clears_the_whole_zones_path_but_keeps_the_group() {
         let mut state = state_with(&["eDP-1", "HDMI-A-1"]);
         let mut render = RenderResources::new_headless_for_test();
         handle_command(
@@ -255,13 +313,84 @@ mod tests {
             handle_command(&mut state, Command::Unset { monitor: "eDP-1".to_string() }, &mut render);
         assert_eq!(resp, Response::Ok);
 
+        // The path is zone-wide, so clearing it via either member clears
+        // playback for both -- but the group itself must survive, not split.
         let edp1_get =
             handle_command(&mut state, Command::Get { monitor: "eDP-1".to_string() }, &mut render);
         assert_eq!(edp1_get, Response::Error("no wallpaper set for eDP-1".to_string()));
-
         let hdmi_get =
             handle_command(&mut state, Command::Get { monitor: "HDMI-A-1".to_string() }, &mut render);
-        assert_eq!(hdmi_get, Response::Path("/pano.mp4".to_string()));
+        assert_eq!(hdmi_get, Response::Error("no wallpaper set for HDMI-A-1".to_string()));
+
+        let Response::MonitorList(infos) =
+            handle_command(&mut state, Command::MonitorList, &mut render)
+        else {
+            panic!("expected MonitorList")
+        };
+        let expected_group = vec!["HDMI-A-1".to_string(), "eDP-1".to_string()];
+        for info in &infos {
+            assert_eq!(info.group, expected_group, "monitor {} should still list both zone members", info.name);
+        }
+    }
+
+    #[test]
+    fn unsetting_every_member_of_a_group_in_turn_does_not_error_on_the_later_members() {
+        // The GUI clears a whole group by calling Unset once per member in a
+        // loop; the first call already clears the zone's (shared) path, so
+        // later calls must succeed as a no-op rather than erroring and
+        // aborting that loop partway through.
+        let mut state = state_with(&["eDP-1", "HDMI-A-1"]);
+        let mut render = RenderResources::new_headless_for_test();
+        handle_command(
+            &mut state,
+            Command::Set {
+                monitors: vec!["eDP-1".to_string(), "HDMI-A-1".to_string()],
+                path: "/pano.mp4".to_string(),
+            },
+            &mut render,
+        );
+
+        handle_command(&mut state, Command::Unset { monitor: "eDP-1".to_string() }, &mut render);
+        let resp = handle_command(
+            &mut state,
+            Command::Unset { monitor: "HDMI-A-1".to_string() },
+            &mut render,
+        );
+        assert_eq!(resp, Response::Ok);
+    }
+
+    #[test]
+    fn setting_a_wallpaper_again_after_clearing_reforms_the_same_group() {
+        let mut state = state_with(&["eDP-1", "HDMI-A-1"]);
+        let mut render = RenderResources::new_headless_for_test();
+        handle_command(
+            &mut state,
+            Command::Set {
+                monitors: vec!["eDP-1".to_string(), "HDMI-A-1".to_string()],
+                path: "/pano.mp4".to_string(),
+            },
+            &mut render,
+        );
+
+        handle_command(&mut state, Command::Unset { monitor: "eDP-1".to_string() }, &mut render);
+        handle_command(&mut state, Command::Unset { monitor: "HDMI-A-1".to_string() }, &mut render);
+
+        handle_command(
+            &mut state,
+            Command::Set {
+                monitors: vec!["eDP-1".to_string(), "HDMI-A-1".to_string()],
+                path: "/new.mp4".to_string(),
+            },
+            &mut render,
+        );
+
+        assert_eq!(
+            state.zones.zone_for_monitor("eDP-1").unwrap().id,
+            state.zones.zone_for_monitor("HDMI-A-1").unwrap().id,
+            "both members must land back in the same zone"
+        );
+        assert_eq!(state.zones.path_for_monitor("eDP-1"), Some("/new.mp4"));
+        assert_eq!(state.zones.path_for_monitor("HDMI-A-1"), Some("/new.mp4"));
     }
 
     #[test]

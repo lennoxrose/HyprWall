@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { TitleBar } from "./components/TitleBar";
 import { MonitorsDropdown } from "./components/MonitorsDropdown";
 import { SettingsModal } from "./components/SettingsModal";
@@ -10,11 +11,11 @@ import {
   DaemonUnreachableError,
   getLibraryFolders,
   listMonitors,
-  pauseWallpaper,
-  playWallpaper,
   scanLibrary,
   setLibraryFolders,
   setWallpaper,
+  unsetWallpaper,
+  watchLibraryFolders,
 } from "./lib/api";
 import type { MonitorState, WallpaperEntry } from "./lib/types";
 
@@ -22,12 +23,14 @@ export default function App() {
   const [monitors, setMonitors] = useState<MonitorState[]>([]);
   const [wallpapers, setWallpapers] = useState<WallpaperEntry[]>([]);
   const [folders, setFolders] = useState<string[]>([]);
-  const [newFolder, setNewFolder] = useState("");
+  const [libraryPath, setLibraryPath] = useState("");
   const [daemonDown, setDaemonDown] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [monitorsOpen, setMonitorsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const { selectedMonitors, toggleMonitor, selectedWallpaper, setSelectedWallpaper } = useSelection();
+  const [groupMode, setGroupMode] = useState(false);
+  const { selectedMonitors, toggleMonitor, clearSelectedMonitors, selectedWallpaper, setSelectedWallpaper } =
+    useSelection();
 
   const refresh = useCallback(async () => {
     try {
@@ -55,6 +58,25 @@ export default function App() {
     return () => clearInterval(id);
   }, [daemonDown, refresh]);
 
+  // Live library updates: watches `folders` on disk and, when something
+  // changes there, re-scans just the library grid -- not `refresh()`, which
+  // would also touch monitors/daemon state for no reason. Re-subscribes
+  // whenever `folders` itself changes (e.g. the user edits it in Settings)
+  // so the watcher always matches what's actually configured.
+  useEffect(() => {
+    if (folders.length === 0) return;
+    watchLibraryFolders(folders).catch(() => {});
+    const unlistenPromise = listen("library-changed", () => {
+      scanLibrary(folders)
+        .then(setWallpapers)
+        .catch(() => {});
+    });
+    return () => {
+      unlistenPromise.then((unlisten) => unlisten());
+      watchLibraryFolders([]).catch(() => {});
+    };
+  }, [folders]);
+
   // Runs a single per-command action (assign/pause/play/folder edit).
   // `Response::Error` from a specific command (e.g. "unknown monitor") is
   // not the same failure as the daemon being unreachable -- it's shown
@@ -76,15 +98,13 @@ export default function App() {
     }
   };
 
-  const addFolder = () =>
+  // Single library path -- whatever's currently in the input is what gets
+  // stored, replacing any previous path outright (no add/remove list).
+  const saveLibraryPath = () =>
     runAction(async () => {
-      if (!newFolder.trim()) return;
-      await setLibraryFolders([...folders, newFolder.trim()]);
-      setNewFolder("");
+      const trimmed = libraryPath.trim();
+      await setLibraryFolders(trimmed ? [trimmed] : []);
     });
-
-  const removeFolder = (folder: string) =>
-    runAction(() => setLibraryFolders(folders.filter((f) => f !== folder)));
 
   // Auto-saves as soon as a wallpaper is picked -- no separate "Assign"
   // confirmation step. If no monitor is selected yet, this just records
@@ -94,11 +114,58 @@ export default function App() {
   const selectWallpaper = (path: string) => {
     setSelectedWallpaper(path);
     if (selectedMonitors.size === 0) return;
-    runAction(() => setWallpaper(Array.from(selectedMonitors), path));
+    if (groupMode && selectedMonitors.size < 2) {
+      setActionError("select at least 2 monitors to group");
+      return;
+    }
+    runAction(() => setWallpaper(Array.from(selectedMonitors), path)).then(() => {
+      if (groupMode) {
+        setGroupMode(false);
+        clearSelectedMonitors();
+      }
+    });
   };
 
-  const pause = (monitor: string) => runAction(() => pauseWallpaper(monitor));
-  const play = (monitor: string) => runAction(() => playWallpaper(monitor));
+  const toggleGroupMode = () => setGroupMode((g) => !g);
+
+  // If every selected monitor is already playing the exact same path (e.g.
+  // right after Ungroup, which re-`Set`s each member solo to the path they
+  // shared), Confirm regroups them immediately with that shared path --
+  // no reason to force picking a wallpaper again just to reassert what's
+  // already showing. Otherwise it just drops the "must have 2+ selected"
+  // gate so the next wallpaper pick assigns immediately.
+  const confirmGroupSelection = () => {
+    const paths = new Set(Array.from(selectedMonitors).map((name) => monitors.find((m) => m.name === name)?.current_path ?? null));
+    const sharedPath = paths.size === 1 ? paths.values().next().value : null;
+    if (sharedPath) {
+      runAction(() => setWallpaper(Array.from(selectedMonitors), sharedPath)).then(() => {
+        setGroupMode(false);
+        clearSelectedMonitors();
+      });
+      return;
+    }
+    setGroupMode(false);
+  };
+
+  // Cancel abandons the in-progress selection entirely.
+  const cancelGroupMode = () => {
+    setGroupMode(false);
+    clearSelectedMonitors();
+  };
+
+  // Splits every member of `names`' zone back out to its own solo zone,
+  // each re-`Set` to the same path the group was already playing -- reuses
+  // hyprwalld's existing split-on-resubmit behavior, no dedicated "ungroup"
+  // wire command needed.
+  const ungroup = (names: string[], path: string) =>
+    runAction(async () => {
+      for (const name of names) await setWallpaper([name], path);
+    });
+
+  const removeWallpaper = (names: string[]) =>
+    runAction(async () => {
+      for (const name of names) await unsetWallpaper(name);
+    });
 
   return (
     <div
@@ -116,16 +183,17 @@ export default function App() {
       <TitleBar
         monitorsOpen={monitorsOpen}
         onToggleMonitors={() => setMonitorsOpen((o) => !o)}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={() => {
+          setLibraryPath(folders[0] ?? "");
+          setSettingsOpen(true);
+        }}
       />
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-        folders={folders}
-        newFolder={newFolder}
-        onNewFolderChange={setNewFolder}
-        onAddFolder={addFolder}
-        onRemoveFolder={removeFolder}
+        libraryPath={libraryPath}
+        onLibraryPathChange={setLibraryPath}
+        onSaveLibraryPath={saveLibraryPath}
       />
       <MonitorsDropdown
         open={monitorsOpen}
@@ -133,8 +201,12 @@ export default function App() {
         selected={selectedMonitors}
         onToggle={toggleMonitor}
         onClose={() => setMonitorsOpen(false)}
-        onPause={pause}
-        onPlay={play}
+        groupMode={groupMode}
+        onToggleGroupMode={toggleGroupMode}
+        onConfirmGroupSelection={confirmGroupSelection}
+        onCancelGroupMode={cancelGroupMode}
+        onUngroup={ungroup}
+        onRemoveWallpaper={removeWallpaper}
       />
       <fieldset
         disabled={daemonDown}

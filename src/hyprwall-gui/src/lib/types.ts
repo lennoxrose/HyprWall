@@ -5,6 +5,7 @@ export interface MonitorState {
   w: number;
   h: number;
   current_path: string | null;
+  group: string[];
 }
 
 export interface WallpaperEntry {

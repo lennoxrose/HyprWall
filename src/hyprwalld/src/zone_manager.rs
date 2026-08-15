@@ -22,6 +22,25 @@ pub enum ZoneError {
     UnknownMonitor(String),
 }
 
+/// Result of `clear_path`, telling the caller exactly what happened to
+/// `monitor`'s zone so it knows which `RenderResources` teardown to run (if
+/// any) and whether to bother persisting.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ClearOutcome {
+    /// `monitor` isn't in any zone at all.
+    NotFound,
+    /// The zone's path was already `None` (e.g. the second member of a
+    /// group being unset in the same batch) -- nothing to do.
+    AlreadyCleared,
+    /// A solo (single-monitor) zone had nothing worth keeping once its path
+    /// is gone, so it was dissolved same as before.
+    Dissolved { zone_id: u64 },
+    /// A real (multi-monitor) zone kept every member -- only its path was
+    /// cleared. Playback should stop for all of `monitors`, but the group
+    /// itself survives so a later `Set` on the same members reforms it.
+    Cleared { zone_id: u64, monitors: Vec<String> },
+}
+
 impl fmt::Display for ZoneError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -126,6 +145,29 @@ impl ZoneManager {
             }
         });
         dissolved
+    }
+
+    /// Clears the wallpaper for `monitor`'s zone -- what a user-initiated
+    /// "remove wallpaper" means, as opposed to `remove_monitor`'s "this
+    /// monitor is physically gone". A solo zone has nothing left worth
+    /// keeping once its path is gone, so it's dissolved exactly like before.
+    /// A real (multi-monitor) zone instead keeps every member and just loses
+    /// its path -- the group survives with no wallpaper, ready for a later
+    /// `Set` on the same members to reform it, rather than splitting apart.
+    pub fn clear_path(&mut self, monitor: &str) -> ClearOutcome {
+        let Some(zone) = self.zones.iter_mut().find(|z| z.monitors.iter().any(|m| m == monitor)) else {
+            return ClearOutcome::NotFound;
+        };
+        if zone.path.is_none() {
+            return ClearOutcome::AlreadyCleared;
+        }
+        if zone.monitors.len() == 1 {
+            let zone_id = zone.id;
+            self.zones.retain(|z| z.id != zone_id);
+            return ClearOutcome::Dissolved { zone_id };
+        }
+        zone.path = None;
+        ClearOutcome::Cleared { zone_id: zone.id, monitors: zone.monitors.clone() }
     }
 
     pub fn zone_for_monitor(&self, monitor: &str) -> Option<&Zone> {
@@ -244,5 +286,52 @@ mod tests {
     fn remove_monitor_not_in_any_zone_is_a_no_op() {
         let mut zm = ZoneManager::new();
         assert_eq!(zm.remove_monitor("eDP-1"), None);
+    }
+
+    #[test]
+    fn clear_path_on_unknown_monitor_reports_not_found() {
+        let mut zm = ZoneManager::new();
+        assert_eq!(zm.clear_path("eDP-1"), ClearOutcome::NotFound);
+    }
+
+    #[test]
+    fn clear_path_dissolves_a_solo_zone() {
+        let reg = registry_with(&["eDP-1"]);
+        let mut zm = ZoneManager::new();
+        zm.apply_set(&["eDP-1".to_string()], "/a.mp4".to_string(), &reg).unwrap();
+        let zone_id = zm.zone_for_monitor("eDP-1").unwrap().id;
+
+        assert_eq!(zm.clear_path("eDP-1"), ClearOutcome::Dissolved { zone_id });
+        assert!(zm.zone_for_monitor("eDP-1").is_none());
+    }
+
+    #[test]
+    fn clear_path_on_a_group_keeps_every_member_but_drops_the_path() {
+        let reg = registry_with(&["eDP-1", "HDMI-A-1"]);
+        let mut zm = ZoneManager::new();
+        zm.apply_set(&["eDP-1".to_string(), "HDMI-A-1".to_string()], "/pano.mp4".to_string(), &reg)
+            .unwrap();
+        let zone_id = zm.zone_for_monitor("eDP-1").unwrap().id;
+
+        let outcome = zm.clear_path("eDP-1");
+        assert_eq!(
+            outcome,
+            ClearOutcome::Cleared { zone_id, monitors: vec!["eDP-1".to_string(), "HDMI-A-1".to_string()] }
+        );
+        assert!(zm.path_for_monitor("eDP-1").is_none());
+        assert!(zm.path_for_monitor("HDMI-A-1").is_none());
+        assert_eq!(zm.zone_for_monitor("eDP-1").unwrap().id, zone_id);
+        assert_eq!(zm.zone_for_monitor("HDMI-A-1").unwrap().id, zone_id, "group must survive intact");
+    }
+
+    #[test]
+    fn clear_path_twice_in_a_row_is_idempotent() {
+        let reg = registry_with(&["eDP-1", "HDMI-A-1"]);
+        let mut zm = ZoneManager::new();
+        zm.apply_set(&["eDP-1".to_string(), "HDMI-A-1".to_string()], "/pano.mp4".to_string(), &reg)
+            .unwrap();
+
+        zm.clear_path("eDP-1");
+        assert_eq!(zm.clear_path("HDMI-A-1"), ClearOutcome::AlreadyCleared);
     }
 }

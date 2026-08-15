@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NERD_FONT, TITLEBAR_BLUE } from "./TitleBar";
+import { getBackgroundServiceEnabled, setBackgroundServiceEnabled } from "../lib/api";
 
 interface Props {
   open: boolean;
@@ -31,6 +32,29 @@ export function SettingsModal({
   onSaveLibraryPath,
 }: Props) {
   const [category, setCategory] = useState(CATEGORIES[0].id);
+  const [backgroundEnabled, setBackgroundEnabledState] = useState<boolean | null>(null);
+  const [backgroundError, setBackgroundError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    getBackgroundServiceEnabled()
+      .then((enabled) => {
+        setBackgroundEnabledState(enabled);
+        setBackgroundError(null);
+      })
+      .catch((err) => setBackgroundError(String(err instanceof Error ? err.message : err)));
+  }, [open]);
+
+  const toggleBackgroundService = () => {
+    if (backgroundEnabled === null) return;
+    const next = !backgroundEnabled;
+    setBackgroundServiceEnabled(next)
+      .then(() => {
+        setBackgroundEnabledState(next);
+        setBackgroundError(null);
+      })
+      .catch((err) => setBackgroundError(String(err instanceof Error ? err.message : err)));
+  };
 
   if (!open) return null;
 
@@ -122,6 +146,30 @@ export function SettingsModal({
                   placeholder="/absolute/path"
                 />
               </div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: 5, marginTop: 6 }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: "#bbb" }}>Run in Background</span>
+                <button
+                  onClick={toggleBackgroundService}
+                  disabled={backgroundEnabled === null}
+                  style={{
+                    border: "none",
+                    borderRadius: 6,
+                    padding: "5px 12px",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: backgroundEnabled === null ? "default" : "pointer",
+                    background: backgroundEnabled ? "#4ade80" : "#3a3a3a",
+                    color: backgroundEnabled ? "#0a0a0a" : "#ccc",
+                  }}
+                >
+                  {backgroundEnabled === null ? "..." : backgroundEnabled ? "Enabled" : "Disabled"}
+                </button>
+              </div>
+              {backgroundError && (
+                <p style={{ color: "#f87171", fontSize: 12, margin: "4px 0 0" }} role="alert">
+                  {backgroundError}
+                </p>
+              )}
             </>
           )}
         </div>

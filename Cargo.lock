@@ -1556,6 +1556,7 @@ name = "hyprwall-gui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "clap",
  "dirs",
  "hyprwall-config",
  "hyprwall-ipc",
@@ -1593,6 +1594,7 @@ dependencies = [
  "anyhow",
  "calloop",
  "calloop-wayland-source",
+ "clap",
  "glow",
  "hyprwall-config",
  "hyprwall-ipc",

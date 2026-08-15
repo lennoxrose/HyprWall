@@ -36,3 +36,8 @@ export const watchLibraryFolders = (folders: string[]) => call<void>("watch_libr
 
 export const captureMonitorSnapshot = (monitorName: string) =>
   call<string>("capture_monitor_snapshot", { monitorName });
+
+export const getBackgroundServiceEnabled = () => call<boolean>("get_background_service_enabled");
+
+export const setBackgroundServiceEnabled = (enabled: boolean) =>
+  call<void>("set_background_service_enabled", { enabled });

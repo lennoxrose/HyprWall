@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { NERD_FONT, TITLEBAR_BLUE } from "./TitleBar";
+import { CreditsPanel } from "./CreditsPanel";
 import {
   getBackgroundServiceEnabled,
   getStartOnLoginEnabled,
@@ -23,6 +24,7 @@ interface Category {
 const CATEGORIES: Category[] = [
   { id: "system", label: "System" },
   { id: "startup", label: "Startup" },
+  { id: "credits", label: "Credits" },
 ];
 
 const BORDER = "1px solid #333";
@@ -230,6 +232,8 @@ export function SettingsModal({
               />
             </>
           )}
+
+          {category === "credits" && <CreditsPanel />}
         </div>
       </div>
     </div>

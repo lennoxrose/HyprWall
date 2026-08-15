@@ -5,6 +5,10 @@ export const NERD_FONT = '"JetBrainsMono Nerd Font", "JetBrains Mono", monospace
  * corner notch fade, chevron rotation) -- opening and closing both use this
  * same duration, deliberately not asymmetric. */
 export const DROPDOWN_ANIM_MS = 380;
+/** Smooth, evenly-paced easing -- no burst-of-speed-then-coast at the start
+ * the way plain `ease` reads. Shared so the panel slide and the chevron
+ * rotation move at the same felt pace. */
+export const DROPDOWN_EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
 
 function CogIcon() {
   return (
@@ -27,7 +31,7 @@ function DoubleChevron({ direction = "down" }: { direction?: "down" | "up" }) {
       fill="none"
       style={{
         transform: direction === "up" ? "rotate(180deg)" : "rotate(0deg)",
-        transition: `transform ${DROPDOWN_ANIM_MS}ms ease`,
+        transition: `transform ${DROPDOWN_ANIM_MS}ms ${DROPDOWN_EASING}`,
       }}
     >
       <path d="M3 5 L12 12 L21 5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="butt" strokeLinejoin="miter" />

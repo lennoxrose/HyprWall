@@ -100,6 +100,7 @@ export default function App() {
         display: "flex",
         flexDirection: "column",
         height: "100vh",
+        overflow: "hidden",
         fontFamily: "sans-serif",
         color: "#eee",
         background: "#0a0a0a",

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { TitleBar } from "./components/TitleBar";
 import { MonitorLayout } from "./components/MonitorLayout";
 import { LibraryGrid } from "./components/LibraryGrid";
 import { AssignButton } from "./components/AssignButton";
@@ -92,10 +93,22 @@ export default function App() {
   const play = (monitor: string) => runAction(() => playWallpaper(monitor));
 
   return (
-    <div style={{ fontFamily: "sans-serif", color: "#eee", background: "#0a0a0a", minHeight: "100vh" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100vh",
+        fontFamily: "sans-serif",
+        color: "#eee",
+        background: "#0a0a0a",
+      }}
+    >
+      <TitleBar />
       {daemonDown && <StatusBanner />}
-      <fieldset disabled={daemonDown} style={{ border: "none", padding: 16 }}>
-        <h1>HyprWall</h1>
+      <fieldset
+        disabled={daemonDown}
+        style={{ border: "none", padding: 16, margin: 0, flex: 1, overflow: "auto" }}
+      >
         {actionError && (
           <p style={{ color: "#f87171", fontSize: 13 }} role="alert">
             {actionError}

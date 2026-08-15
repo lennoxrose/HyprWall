@@ -3,6 +3,19 @@ name = "hyprwall-gui"
 version.workspace = true
 edition = "2021"
 
+[features]
+# `tauri-cli` special-cases this exact feature name: `cargo tauri dev` passes
+# --no-default-features to disable it (loads the Vite dev server at
+# build.devUrl for hot reload); every other build path -- plain `cargo
+# build`, `cargo build --release`, makepkg -- keeps it enabled by default and
+# loads the bundled build.frontendDist (dist/) instead. Without this, Tauri's
+# dev-vs-prod decision (tauri-build's `is_dev()`) has no signal to key off of
+# and always falls back to the dev-server URL, which is why a real standalone
+# install failed with "Could not connect to localhost: Connection refused" --
+# nothing was serving port 1420 outside an active `npm run dev`/`tauri dev`.
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -10,8 +23,8 @@ tauri-build = { version = "2", features = [] }
 anyhow = "1.0.104"
 clap = { version = "4.6.6", features = ["derive"] }
 dirs = "6.0.0"
-hyprwall-config = { version = "0.1.0", path = "../../hyprwall-config" }
-hyprwall-ipc = { version = "0.1.0", path = "../../hyprwall-ipc" }
+hyprwall-config = { path = "../../hyprwall-config" }
+hyprwall-ipc = { path = "../../hyprwall-ipc" }
 libc = "0.2"
 libmpv2 = "6.0.0"
 notify = "6"

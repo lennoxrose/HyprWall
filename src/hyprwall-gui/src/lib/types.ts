@@ -8,7 +8,10 @@ export interface MonitorState {
   group: string[];
 }
 
+export type WallpaperKind = "video" | "image";
+
 export interface WallpaperEntry {
   path: string;
   thumbnail_path: string | null;
+  kind: WallpaperKind;
 }

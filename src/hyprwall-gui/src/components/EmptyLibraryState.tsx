@@ -19,7 +19,7 @@ function SadFaceIcon() {
 export function EmptyLibraryState() {
   return (
     <CenteredMessage icon={<SadFaceIcon />} color={COLOR}>
-      Oh... oh... you haven't configured an Image Library Folder yet. Click the Cog icon on the top
+      Oh... oh... you haven't configured a Media Library Folder yet. Click the Cog icon on the top
       right and select the System category to configure a path.
     </CenteredMessage>
   );

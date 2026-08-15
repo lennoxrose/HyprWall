@@ -29,8 +29,13 @@ pub fn scan_library(folders: Vec<String>) -> Vec<WallpaperEntry> {
                 continue;
             }
             let Some(path_str) = path.to_str() else { continue };
-            let thumbnail_path =
-                thumbnails::ensure_thumbnail(path_str).ok().and_then(|p| p.to_str().map(str::to_string));
+            let thumbnail_path = match thumbnails::ensure_thumbnail(path_str) {
+                Ok(p) => p.to_str().map(str::to_string),
+                Err(e) => {
+                    eprintln!("hyprwall-gui: thumbnail generation failed for {path_str}: {e:#}");
+                    None
+                }
+            };
             entries.push(WallpaperEntry { path: path_str.to_string(), thumbnail_path });
         }
     }

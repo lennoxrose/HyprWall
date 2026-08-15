@@ -4,13 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [build-dependencies]
-tauri-build = "2"
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
 anyhow = "1.0.104"
 dirs = "6.0.0"
 hyprwall-config = { version = "0.1.0", path = "../../hyprwall-config" }
 hyprwall-ipc = { version = "0.1.0", path = "../../hyprwall-ipc" }
+libc = "0.2"
 libmpv2 = "6.0.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0"

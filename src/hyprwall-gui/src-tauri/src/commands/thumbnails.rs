@@ -44,6 +44,12 @@ fn generate_thumbnail(video_path: &str, dest: &Path) -> anyhow::Result<()> {
     let work_dir = tempfile::tempdir()?;
     let outdir = work_dir.path().to_string_lossy().into_owned();
 
+    // GTK's init (pulled in by Tauri's webview) resets LC_NUMERIC back to
+    // the process locale, undoing main.rs's startup setlocale call -- so
+    // this has to happen again right here, immediately before mpv reads
+    // it, not just once at process start.
+    unsafe { libc::setlocale(libc::LC_NUMERIC, c"C".as_ptr()) };
+
     let mpv = Mpv::with_initializer(move |init| {
         init.set_option("vo", "image")?;
         init.set_option("vo-image-outdir", outdir.as_str())?;
@@ -96,5 +102,24 @@ mod tests {
         let mtime_after = std::fs::metadata(&thumb_again).unwrap().modified().unwrap();
         assert_eq!(thumb, thumb_again);
         assert_eq!(mtime_before, mtime_after, "second call should not have regenerated the file");
+    }
+
+    #[test]
+    fn generates_a_thumbnail_even_when_lc_numeric_is_not_c() {
+        // Reproduces the real bug: GTK (pulled in by Tauri's webview) resets
+        // LC_NUMERIC away from "C" at some point before a thumbnail is ever
+        // requested. mpv refuses to initialize outside "C" for LC_NUMERIC,
+        // so generate_thumbnail must re-set it itself rather than relying on
+        // a one-time setlocale call at process start.
+        let cache_root = tempfile::tempdir().unwrap();
+        std::env::set_var("XDG_CACHE_HOME", cache_root.path());
+
+        unsafe { libc::setlocale(libc::LC_NUMERIC, c"en_US.UTF-8".as_ptr()) };
+        let thumb = ensure_thumbnail(&fixture_path()).unwrap();
+        assert!(thumb.exists());
+
+        // Restore, so this test doesn't leak process-global locale state
+        // into whichever test runs after it in the same test binary.
+        unsafe { libc::setlocale(libc::LC_NUMERIC, c"C".as_ptr()) };
     }
 }

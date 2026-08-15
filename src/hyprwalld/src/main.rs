@@ -36,6 +36,15 @@ struct Daemon {
 }
 
 fn main() -> anyhow::Result<()> {
+    // libmpv refuses to initialize outside the "C" locale for LC_NUMERIC
+    // (it parses numbers like frame timestamps with the C library's
+    // locale-sensitive functions internally); the desktop's LANG/LC_*
+    // being e.g. en_US.UTF-8 is enough to trip this, so every MpvInstance
+    // this process ever creates depends on setting it back here first.
+    // Only LC_NUMERIC is touched -- everything else (message locale,
+    // collation, etc.) is left as the user configured it.
+    unsafe { libc::setlocale(libc::LC_NUMERIC, c"C".as_ptr()) };
+
     let (backend, app_data) = WaylandBackend::new()?;
     let config_path = hyprwall_config::store::default_config_path();
     // One informative diagnostic if the file exists but fails to parse; the

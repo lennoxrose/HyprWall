@@ -11,6 +11,7 @@ glow = "0.18.0"
 hyprwall-config = { version = "0.1.0", path = "../hyprwall-config" }
 hyprwall-ipc = { version = "0.1.0", path = "../hyprwall-ipc" }
 khronos-egl = { version = "6.0.0", features = ["dynamic"] }
+libc = "0.2"
 libmpv2 = { version = "6.0.0", features = ["render"] }
 smithay-client-toolkit = "0.21.1"
 wayland-client = "0.31.15"

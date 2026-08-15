@@ -106,8 +106,8 @@ impl EglCore {
         let egl = unsafe { EglInstance::load_required() }
             .map_err(|e| anyhow::anyhow!("failed to load libEGL.so.1 (EGL >= 1.4 required): {e}"))?;
 
-        let display = unsafe { egl.get_display(wl_display_ptr) }
-            .ok_or_else(|| anyhow::anyhow!("eglGetDisplay failed"))?;
+        let display =
+            unsafe { egl.get_display(wl_display_ptr) }.ok_or_else(|| anyhow::anyhow!("eglGetDisplay failed"))?;
         egl.initialize(display)?;
 
         let attribs = [
@@ -131,20 +131,23 @@ impl EglCore {
         let context_attribs = [egl::CONTEXT_CLIENT_VERSION, 3, egl::NONE];
         let context = egl.create_context(display, config, None, &context_attribs)?;
 
-        let (wl_egl_surface, surface) =
-            create_window_surface(&egl, display, config, wl_surface, width, height)?;
+        let (wl_egl_surface, surface) = create_window_surface(&egl, display, config, wl_surface, width, height)?;
 
         // Must be current before `glow::Context::from_loader_function` runs
         // (it immediately calls `glGetString(GL_VERSION)`).
         egl.make_current(display, Some(surface), Some(surface), Some(context))?;
 
         let gl = unsafe {
-            glow::Context::from_loader_function(|s| {
-                egl.get_proc_address(s).map_or(std::ptr::null(), |f| f as *const _)
-            })
+            glow::Context::from_loader_function(|s| egl.get_proc_address(s).map_or(std::ptr::null(), |f| f as *const _))
         };
 
-        let core = Rc::new(EglCore { egl, display, config, context, gl });
+        let core = Rc::new(EglCore {
+            egl,
+            display,
+            config,
+            context,
+            gl,
+        });
         let monitor_surface = MonitorSurface {
             core: Rc::clone(&core),
             surface,
@@ -174,7 +177,9 @@ impl EglCore {
     /// render API. Returns null if the symbol is unavailable, which is what
     /// mpv's `get_proc_address` contract expects.
     pub fn get_proc_address(&self, name: &str) -> *mut c_void {
-        self.egl.get_proc_address(name).map_or(std::ptr::null_mut(), |f| f as *mut c_void)
+        self.egl
+            .get_proc_address(name)
+            .map_or(std::ptr::null_mut(), |f| f as *mut c_void)
     }
 }
 
@@ -187,9 +192,7 @@ fn create_window_surface(
     height: i32,
 ) -> anyhow::Result<(WlEglSurface, egl::Surface)> {
     let wl_egl_surface = WlEglSurface::new(wl_surface.id(), width, height)?;
-    let surface = unsafe {
-        egl.create_window_surface(display, config, wl_egl_surface.ptr() as *mut c_void, None)?
-    };
+    let surface = unsafe { egl.create_window_surface(display, config, wl_egl_surface.ptr() as *mut c_void, None)? };
     Ok((wl_egl_surface, surface))
 }
 

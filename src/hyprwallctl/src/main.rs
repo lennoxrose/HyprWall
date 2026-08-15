@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use hyprwall_ipc::{Command, parse_response, Response};
+use hyprwall_ipc::{Command, Response, parse_response};
 
 #[derive(Parser)]
 struct Cli {
@@ -12,11 +12,22 @@ enum CliCommand {
     /// List known monitor names
     MonitorList,
     /// Assign a wallpaper to one monitor, or a comma-separated list to span them as one zone
-    Set { monitors: String, path: String },
-    Unset { monitor: String },
-    Pause { monitor: String },
-    Play { monitor: String },
-    Get { monitor: String },
+    Set {
+        monitors: String,
+        path: String,
+    },
+    Unset {
+        monitor: String,
+    },
+    Pause {
+        monitor: String,
+    },
+    Play {
+        monitor: String,
+    },
+    Get {
+        monitor: String,
+    },
 }
 
 fn main() {
@@ -34,15 +45,13 @@ fn main() {
     };
 
     match hyprwall_ipc::client::send(&hyprwall_ipc::default_socket_path(), &command) {
-        Ok(response) => {
-            match parse_response(&response) {
-                Response::Error(msg) => {
-                    eprintln!("hyprwallctl: {msg}");
-                    std::process::exit(1);
-                }
-                _ => println!("{response}"),
+        Ok(response) => match parse_response(&response) {
+            Response::Error(msg) => {
+                eprintln!("hyprwallctl: {msg}");
+                std::process::exit(1);
             }
-        }
+            _ => println!("{response}"),
+        },
         Err(e) => {
             eprintln!("hyprwallctl: {e}");
             std::process::exit(1);

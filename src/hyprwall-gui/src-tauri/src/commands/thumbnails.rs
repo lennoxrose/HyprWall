@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use libmpv2::events::Event;
-use libmpv2::{Mpv, mpv_end_file_reason};
+use libmpv2::{mpv_end_file_reason, Mpv};
 
 use crate::commands::library::WallpaperKind;
 
@@ -238,7 +238,10 @@ mod tests {
         let thumb_again = ensure_thumbnail_in(cache_root.path(), &path, WallpaperKind::Video).unwrap();
         let mtime_after = std::fs::metadata(&thumb_again).unwrap().modified().unwrap();
         assert_eq!(thumb, thumb_again);
-        assert_eq!(mtime_before, mtime_after, "second call should not have regenerated the file");
+        assert_eq!(
+            mtime_before, mtime_after,
+            "second call should not have regenerated the file"
+        );
     }
 
     #[test]

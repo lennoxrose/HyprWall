@@ -160,7 +160,9 @@ impl RenderResources {
     /// landed yet).
     pub fn clear_monitor(&mut self, name: &str) {
         let Some(core) = self.core.clone() else { return };
-        let Some(surface) = self.monitor_surfaces.get(name).cloned() else { return };
+        let Some(surface) = self.monitor_surfaces.get(name).cloned() else {
+            return;
+        };
         if let Err(e) = surface.make_current() {
             eprintln!("hyprwalld: eglMakeCurrent failed clearing {name}: {e}");
             return;
@@ -179,7 +181,11 @@ impl RenderResources {
     fn record_pending(&mut self, outcome: &ZoneApplyOutcome, monitors: &[String], path: &str) {
         self.pending_sets.insert(
             outcome.zone_id,
-            PendingSet { outcome: outcome.clone(), monitors: monitors.to_vec(), path: path.to_string() },
+            PendingSet {
+                outcome: outcome.clone(),
+                monitors: monitors.to_vec(),
+                path: path.to_string(),
+            },
         );
     }
 
@@ -213,8 +219,7 @@ impl RenderResources {
             self.record_pending(outcome, monitors, path);
             return;
         };
-        let Some(any_surface) = monitors.iter().find_map(|m| self.monitor_surfaces.get(m).cloned())
-        else {
+        let Some(any_surface) = monitors.iter().find_map(|m| self.monitor_surfaces.get(m).cloned()) else {
             self.record_pending(outcome, monitors, path);
             return;
         };
@@ -264,8 +269,14 @@ impl RenderResources {
                     return;
                 }
             };
-            self.zone_playback
-                .insert(outcome.zone_id, ZonePlayback { mpv, target, monitors: monitors.to_vec() });
+            self.zone_playback.insert(
+                outcome.zone_id,
+                ZonePlayback {
+                    mpv,
+                    target,
+                    monitors: monitors.to_vec(),
+                },
+            );
             self.needs_wakeup_wiring.push(outcome.zone_id);
         } else if let Some(zp) = self.zone_playback.get_mut(&outcome.zone_id) {
             zp.monitors = monitors.to_vec();
@@ -274,7 +285,10 @@ impl RenderResources {
         if let Some(zp) = self.zone_playback.get_mut(&outcome.zone_id)
             && let Err(e) = zp.mpv.load_file(path)
         {
-            eprintln!("hyprwalld: mpv load_file({path}) failed for zone {}: {e}", outcome.zone_id);
+            eprintln!(
+                "hyprwalld: mpv load_file({path}) failed for zone {}: {e}",
+                outcome.zone_id
+            );
         }
     }
 
@@ -290,7 +304,9 @@ impl RenderResources {
     /// to avoid restoring a fresh zone from disk on top of one that's already
     /// live and just waiting for its surface to reappear.
     pub fn is_monitor_live(&self, name: &str) -> bool {
-        self.zone_playback.values().any(|zp| zp.monitors.iter().any(|m| m == name))
+        self.zone_playback
+            .values()
+            .any(|zp| zp.monitors.iter().any(|m| m == name))
     }
 
     /// Renders one zone's current frame into its `ZoneTarget`, then blits
@@ -298,12 +314,13 @@ impl RenderResources {
     /// it. Called from the zone's ping source (see `frame_scheduler`); a
     /// no-op if the zone or any of its monitor surfaces has since gone away.
     pub fn render_and_present(&mut self, zone_id: u64, monitors: &MonitorRegistry) {
-        let Some(zp) = self.zone_playback.get_mut(&zone_id) else { return };
+        let Some(zp) = self.zone_playback.get_mut(&zone_id) else {
+            return;
+        };
         if !zp.mpv.wants_redraw() {
             return;
         }
-        let Some(any_surface) = zp.monitors.iter().find_map(|m| self.monitor_surfaces.get(m).cloned())
-        else {
+        let Some(any_surface) = zp.monitors.iter().find_map(|m| self.monitor_surfaces.get(m).cloned()) else {
             return;
         };
         if let Err(e) = any_surface.make_current() {
@@ -317,7 +334,9 @@ impl RenderResources {
         }
 
         for name in &zp.monitors {
-            let Some(surface) = self.monitor_surfaces.get(name) else { continue };
+            let Some(surface) = self.monitor_surfaces.get(name) else {
+                continue;
+            };
             let Some(monitor) = monitors.get(name) else { continue };
             if let Err(e) = surface.make_current() {
                 eprintln!("hyprwalld: eglMakeCurrent failed blitting zone {zone_id} to {name}: {e}");
@@ -339,7 +358,12 @@ mod tests {
     fn outcome(zone_id: u64) -> ZoneApplyOutcome {
         ZoneApplyOutcome {
             zone_id,
-            bounding_box: Rect { x: 0, y: 0, w: 1920, h: 1080 },
+            bounding_box: Rect {
+                x: 0,
+                y: 0,
+                w: 1920,
+                h: 1080,
+            },
             dissolved_zone_ids: Vec::new(),
         }
     }
@@ -391,7 +415,11 @@ mod tests {
         later.dissolved_zone_ids.push(1);
         render.apply_set_outcome(&later, &["HDMI-A-1".to_string()], "/b.mp4");
 
-        assert_eq!(render.pending_set_count(), 1, "zone 2's own Set is now pending in zone 1's place");
+        assert_eq!(
+            render.pending_set_count(),
+            1,
+            "zone 2's own Set is now pending in zone 1's place"
+        );
         assert!(render.zone_playback.is_empty());
     }
 
@@ -421,7 +449,14 @@ mod tests {
     fn is_monitor_live_is_false_for_a_merely_pending_set() {
         let mut render = RenderResources::new_headless_for_test();
         render.apply_set_outcome(&outcome(1), &["eDP-1".to_string()], "/a.mp4");
-        assert_eq!(render.pending_set_count(), 1, "no GL core, so this only records a pending set");
-        assert!(!render.is_monitor_live("eDP-1"), "never got real playback resources, so not live");
+        assert_eq!(
+            render.pending_set_count(),
+            1,
+            "no GL core, so this only records a pending set"
+        );
+        assert!(
+            !render.is_monitor_live("eDP-1"),
+            "never got real playback resources, so not live"
+        );
     }
 }

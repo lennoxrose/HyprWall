@@ -1,0 +1,4 @@
+# Matches this codebase's actual established style (single-line struct
+# literals, chained calls, `let-else` staying compact) rather than forcing
+# everyone through stock rustfmt's narrower 100-column default.
+max_width = 120

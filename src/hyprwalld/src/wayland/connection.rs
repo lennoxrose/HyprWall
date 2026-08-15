@@ -39,10 +39,8 @@ use glow::HasContext;
 use smithay_client_toolkit::compositor::{CompositorHandler, CompositorState};
 use smithay_client_toolkit::output::{OutputHandler, OutputState};
 use smithay_client_toolkit::registry::{ProvidesRegistryState, RegistryState};
-use smithay_client_toolkit::shell::wlr_layer::{
-    LayerShell, LayerShellHandler, LayerSurface, LayerSurfaceConfigure,
-};
 use smithay_client_toolkit::shell::WaylandSurface;
+use smithay_client_toolkit::shell::wlr_layer::{LayerShell, LayerShellHandler, LayerSurface, LayerSurfaceConfigure};
 use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_handlers};
 use wayland_client::protocol::wl_output::{self, WlOutput};
 use wayland_client::protocol::wl_surface::WlSurface;
@@ -118,9 +116,8 @@ impl WaylandBackend {
         // `LayerShell::bind` both confirms the global's presence and does
         // the real bind (Task 7 only did the presence check via a raw
         // bind, before `AppData` implemented `LayerShellHandler`).
-        let layer_shell = LayerShell::bind(&globals, &qh).map_err(|_| {
-            anyhow::anyhow!("compositor does not support zwlr_layer_shell_v1 (not wlroots-based?)")
-        })?;
+        let layer_shell = LayerShell::bind(&globals, &qh)
+            .map_err(|_| anyhow::anyhow!("compositor does not support zwlr_layer_shell_v1 (not wlroots-based?)"))?;
 
         let registry_state = RegistryState::new(&globals);
         let output_state = OutputState::new(&globals, &qh);
@@ -149,16 +146,11 @@ impl OutputHandler for AppData {
 
     fn new_output(&mut self, _conn: &Connection, qh: &QueueHandle<Self>, output: WlOutput) {
         self.sync_output(output.clone());
-        if let Some(info) = self.output_state.info(&output) {
-            if let Some(name) = info.name {
-                self.layer_surfaces.create(
-                    &self.compositor_state,
-                    &self.layer_shell,
-                    qh,
-                    &output,
-                    name,
-                );
-            }
+        if let Some(info) = self.output_state.info(&output)
+            && let Some(name) = info.name
+        {
+            self.layer_surfaces
+                .create(&self.compositor_state, &self.layer_shell, qh, &output, name);
         }
     }
 
@@ -167,40 +159,50 @@ impl OutputHandler for AppData {
     }
 
     fn output_destroyed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, output: WlOutput) {
-        if let Some(info) = self.output_state.info(&output) {
-            if let Some(name) = info.name {
-                self.monitors.remove(&name);
-                // Drop this struct's own `Rc<MonitorSurface>` now, but do
-                // NOT destroy the layer surface yet: `render::
-                // RenderResources` may still be holding its own clone of the
-                // same `Rc` from before this dispatch tick's `sync_monitor_
-                // surfaces` call, and destroying the `wl_surface` while that
-                // clone's EGL surface is still alive would violate
-                // `MonitorSurface`'s drop-order requirement. Queue the name;
-                // `main.rs` destroys it right after resyncing, once that
-                // stale clone (if any) is guaranteed dropped.
-                self.render_targets.remove(&name);
-                // Also queue the name for `ZoneManager::remove_monitor` +
-                // (if that dissolves a zone) `RenderResources::teardown_zone`
-                // -- see `pending_monitor_removals`'s doc comment. Without
-                // this, a zone whose last monitor is unplugged keeps its
-                // `MpvInstance`/`ZoneTarget` running (and using CPU/GPU)
-                // indefinitely, since nothing else ever calls `Set` again for
-                // it.
-                self.pending_monitor_removals.push(name.clone());
-                self.pending_layer_destroy.push(name);
-            }
+        if let Some(info) = self.output_state.info(&output)
+            && let Some(name) = info.name
+        {
+            self.monitors.remove(&name);
+            // Drop this struct's own `Rc<MonitorSurface>` now, but do
+            // NOT destroy the layer surface yet: `render::
+            // RenderResources` may still be holding its own clone of the
+            // same `Rc` from before this dispatch tick's `sync_monitor_
+            // surfaces` call, and destroying the `wl_surface` while that
+            // clone's EGL surface is still alive would violate
+            // `MonitorSurface`'s drop-order requirement. Queue the name;
+            // `main.rs` destroys it right after resyncing, once that
+            // stale clone (if any) is guaranteed dropped.
+            self.render_targets.remove(&name);
+            // Also queue the name for `ZoneManager::remove_monitor` +
+            // (if that dissolves a zone) `RenderResources::teardown_zone`
+            // -- see `pending_monitor_removals`'s doc comment. Without
+            // this, a zone whose last monitor is unplugged keeps its
+            // `MpvInstance`/`ZoneTarget` running (and using CPU/GPU)
+            // indefinitely, since nothing else ever calls `Set` again for
+            // it.
+            self.pending_monitor_removals.push(name.clone());
+            self.pending_layer_destroy.push(name);
         }
     }
 }
 
 impl AppData {
     fn sync_output(&mut self, output: WlOutput) {
-        let Some(info) = self.output_state.info(&output) else { return };
+        let Some(info) = self.output_state.info(&output) else {
+            return;
+        };
         let Some(name) = info.name else { return };
         let Some((lw, lh)) = info.logical_size else { return };
         let (lx, ly) = info.logical_position.unwrap_or((0, 0));
-        self.monitors.insert(Monitor { name, logical: Rect { x: lx, y: ly, w: lw, h: lh } });
+        self.monitors.insert(Monitor {
+            name,
+            logical: Rect {
+                x: lx,
+                y: ly,
+                w: lw,
+                h: lh,
+            },
+        });
     }
 }
 
@@ -236,22 +238,10 @@ impl CompositorHandler for AppData {
 
     fn frame(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &WlSurface, _time: u32) {}
 
-    fn surface_enter(
-        &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _surface: &WlSurface,
-        _output: &WlOutput,
-    ) {
+    fn surface_enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &WlSurface, _output: &WlOutput) {
     }
 
-    fn surface_leave(
-        &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _surface: &WlSurface,
-        _output: &WlOutput,
-    ) {
+    fn surface_leave(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &WlSurface, _output: &WlOutput) {
     }
 }
 
@@ -266,7 +256,9 @@ impl LayerShellHandler for AppData {
         configure: LayerSurfaceConfigure,
         _serial: u32,
     ) {
-        let Some(name) = self.layer_surfaces.name_for(layer).map(str::to_owned) else { return };
+        let Some(name) = self.layer_surfaces.name_for(layer).map(str::to_owned) else {
+            return;
+        };
 
         // Only create the render target once per output; resizing an
         // existing EGL surface on later configure events is out of scope
@@ -313,7 +305,9 @@ impl LayerShellHandler for AppData {
             return;
         }
         unsafe {
-            surface.gl().clear_color(CLEAR_COLOR.0, CLEAR_COLOR.1, CLEAR_COLOR.2, CLEAR_COLOR.3);
+            surface
+                .gl()
+                .clear_color(CLEAR_COLOR.0, CLEAR_COLOR.1, CLEAR_COLOR.2, CLEAR_COLOR.3);
             surface.gl().clear(glow::COLOR_BUFFER_BIT);
         }
         if let Err(e) = surface.swap_buffers() {

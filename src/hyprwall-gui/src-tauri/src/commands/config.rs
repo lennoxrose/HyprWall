@@ -13,7 +13,9 @@ pub fn set_library_folders(folders: Vec<String>) -> Result<(), String> {
 }
 
 fn get_library_folders_at(path: &Path) -> Result<Vec<String>, String> {
-    store::load(path).map(|cfg| cfg.library_paths).map_err(|e| e.to_string())
+    store::load(path)
+        .map(|cfg| cfg.library_paths)
+        .map_err(|e| e.to_string())
 }
 
 fn set_library_folders_at(path: &Path, folders: Vec<String>) -> Result<(), String> {
@@ -51,6 +53,10 @@ mod tests {
 
         let loaded = store::load(&path).unwrap();
         assert_eq!(loaded.library_paths, vec!["/home/u/Videos".to_string()]);
-        assert_eq!(loaded.zones.len(), 1, "zones set by hyprwalld must survive a GUI-side folder update");
+        assert_eq!(
+            loaded.zones.len(),
+            1,
+            "zones set by hyprwalld must survive a GUI-side folder update"
+        );
     }
 }

@@ -39,9 +39,7 @@ impl fmt::Display for ParseError {
 fn parse_wallpaper_settings_blob(blob: &str) -> Option<WallpaperSettings> {
     let mut settings = WallpaperSettings::default();
     for pair in blob.split(',') {
-        let mut kv = pair.splitn(2, ':');
-        let key = kv.next()?;
-        let value = kv.next()?;
+        let (key, value) = pair.split_once(':')?;
         match key {
             "zoom" => settings.zoom = value.parse().ok()?,
             "pan_x" => settings.pan_x = value.parse().ok()?,
@@ -94,10 +92,16 @@ pub fn parse_command(line: &str) -> Result<Command, ParseError> {
             let monitors_csv = args.next().unwrap_or("");
             let path = args.next().unwrap_or("").trim();
             if monitors_csv.is_empty() {
-                return Err(ParseError::MissingArg { verb: "set", arg: "monitor" });
+                return Err(ParseError::MissingArg {
+                    verb: "set",
+                    arg: "monitor",
+                });
             }
             if path.is_empty() {
-                return Err(ParseError::MissingArg { verb: "set", arg: "path" });
+                return Err(ParseError::MissingArg {
+                    verb: "set",
+                    arg: "path",
+                });
             }
             let monitors: Vec<String> = monitors_csv
                 .split(',')
@@ -108,26 +112,54 @@ pub fn parse_command(line: &str) -> Result<Command, ParseError> {
             if monitors.is_empty() {
                 return Err(ParseError::EmptyMonitorList);
             }
-            Ok(Command::Set { monitors, path: path.to_string() })
+            Ok(Command::Set {
+                monitors,
+                path: path.to_string(),
+            })
         }
-        "unset" if !rest.is_empty() => Ok(Command::Unset { monitor: rest.to_string() }),
-        "unset" => Err(ParseError::MissingArg { verb: "unset", arg: "monitor" }),
-        "pause" if !rest.is_empty() => Ok(Command::Pause { monitor: rest.to_string() }),
-        "pause" => Err(ParseError::MissingArg { verb: "pause", arg: "monitor" }),
-        "play" if !rest.is_empty() => Ok(Command::Play { monitor: rest.to_string() }),
-        "play" => Err(ParseError::MissingArg { verb: "play", arg: "monitor" }),
-        "get" if !rest.is_empty() => Ok(Command::Get { monitor: rest.to_string() }),
-        "get" => Err(ParseError::MissingArg { verb: "get", arg: "monitor" }),
+        "unset" if !rest.is_empty() => Ok(Command::Unset {
+            monitor: rest.to_string(),
+        }),
+        "unset" => Err(ParseError::MissingArg {
+            verb: "unset",
+            arg: "monitor",
+        }),
+        "pause" if !rest.is_empty() => Ok(Command::Pause {
+            monitor: rest.to_string(),
+        }),
+        "pause" => Err(ParseError::MissingArg {
+            verb: "pause",
+            arg: "monitor",
+        }),
+        "play" if !rest.is_empty() => Ok(Command::Play {
+            monitor: rest.to_string(),
+        }),
+        "play" => Err(ParseError::MissingArg {
+            verb: "play",
+            arg: "monitor",
+        }),
+        "get" if !rest.is_empty() => Ok(Command::Get {
+            monitor: rest.to_string(),
+        }),
+        "get" => Err(ParseError::MissingArg {
+            verb: "get",
+            arg: "monitor",
+        }),
         "wallpaper-settings" => {
             let mut args = rest.splitn(2, ' ');
             let blob = args.next().unwrap_or("");
             let path = args.next().unwrap_or("").trim();
             if path.is_empty() {
-                return Err(ParseError::MissingArg { verb: "wallpaper-settings", arg: "path" });
+                return Err(ParseError::MissingArg {
+                    verb: "wallpaper-settings",
+                    arg: "path",
+                });
             }
-            let settings =
-                parse_wallpaper_settings_blob(blob).ok_or(ParseError::InvalidWallpaperSettings)?;
-            Ok(Command::SetWallpaperSettings { path: path.to_string(), settings })
+            let settings = parse_wallpaper_settings_blob(blob).ok_or(ParseError::InvalidWallpaperSettings)?;
+            Ok(Command::SetWallpaperSettings {
+                path: path.to_string(),
+                settings,
+            })
         }
         other => Err(ParseError::UnknownVerb(other.to_string())),
     }
@@ -145,7 +177,11 @@ impl Command {
             Command::Play { monitor } => format!("play {monitor}"),
             Command::Get { monitor } => format!("get {monitor}"),
             Command::SetWallpaperSettings { path, settings } => {
-                format!("wallpaper-settings {} {}", format_wallpaper_settings_blob(settings), path)
+                format!(
+                    "wallpaper-settings {} {}",
+                    format_wallpaper_settings_blob(settings),
+                    path
+                )
             }
         }
     }
@@ -172,7 +208,10 @@ mod tests {
         let line = "wallpaper-settings zoom:1.2,pan_x:-0.1,pan_y:0,fit:contain,volume:40,brightness:10,contrast:-5,hue:0,saturation:20 /home/u/Pictures/a photo.jpg";
         assert_eq!(
             parse_command(line),
-            Ok(Command::SetWallpaperSettings { path: "/home/u/Pictures/a photo.jpg".to_string(), settings })
+            Ok(Command::SetWallpaperSettings {
+                path: "/home/u/Pictures/a photo.jpg".to_string(),
+                settings
+            })
         );
     }
 
@@ -187,7 +226,10 @@ mod tests {
         let line = "wallpaper-settings zoom:1.0";
         assert_eq!(
             parse_command(line),
-            Err(ParseError::MissingArg { verb: "wallpaper-settings", arg: "path" })
+            Err(ParseError::MissingArg {
+                verb: "wallpaper-settings",
+                arg: "path"
+            })
         );
     }
 
@@ -229,24 +271,52 @@ mod tests {
 
     #[test]
     fn parses_pause_play_get() {
-        assert_eq!(parse_command("pause eDP-1"), Ok(Command::Pause { monitor: "eDP-1".to_string() }));
-        assert_eq!(parse_command("play eDP-1"), Ok(Command::Play { monitor: "eDP-1".to_string() }));
-        assert_eq!(parse_command("get eDP-1"), Ok(Command::Get { monitor: "eDP-1".to_string() }));
+        assert_eq!(
+            parse_command("pause eDP-1"),
+            Ok(Command::Pause {
+                monitor: "eDP-1".to_string()
+            })
+        );
+        assert_eq!(
+            parse_command("play eDP-1"),
+            Ok(Command::Play {
+                monitor: "eDP-1".to_string()
+            })
+        );
+        assert_eq!(
+            parse_command("get eDP-1"),
+            Ok(Command::Get {
+                monitor: "eDP-1".to_string()
+            })
+        );
     }
 
     #[test]
     fn parses_unset() {
-        assert_eq!(parse_command("unset eDP-1"), Ok(Command::Unset { monitor: "eDP-1".to_string() }));
+        assert_eq!(
+            parse_command("unset eDP-1"),
+            Ok(Command::Unset {
+                monitor: "eDP-1".to_string()
+            })
+        );
     }
 
     #[test]
     fn rejects_unset_missing_monitor() {
-        assert_eq!(parse_command("unset"), Err(ParseError::MissingArg { verb: "unset", arg: "monitor" }));
+        assert_eq!(
+            parse_command("unset"),
+            Err(ParseError::MissingArg {
+                verb: "unset",
+                arg: "monitor"
+            })
+        );
     }
 
     #[test]
     fn to_wire_round_trips_unset() {
-        let cmd = Command::Unset { monitor: "eDP-1".to_string() };
+        let cmd = Command::Unset {
+            monitor: "eDP-1".to_string(),
+        };
         assert_eq!(parse_command(&cmd.to_wire()), Ok(cmd));
     }
 
@@ -258,14 +328,20 @@ mod tests {
 
     #[test]
     fn rejects_unknown_verb() {
-        assert_eq!(parse_command("frobnicate x"), Err(ParseError::UnknownVerb("frobnicate".to_string())));
+        assert_eq!(
+            parse_command("frobnicate x"),
+            Err(ParseError::UnknownVerb("frobnicate".to_string()))
+        );
     }
 
     #[test]
     fn rejects_set_missing_path() {
         assert_eq!(
             parse_command("set eDP-1"),
-            Err(ParseError::MissingArg { verb: "set", arg: "path" })
+            Err(ParseError::MissingArg {
+                verb: "set",
+                arg: "path"
+            })
         );
     }
 

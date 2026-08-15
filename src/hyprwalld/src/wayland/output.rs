@@ -25,12 +25,10 @@
 use std::collections::HashMap;
 
 use smithay_client_toolkit::compositor::CompositorState;
-use smithay_client_toolkit::shell::wlr_layer::{
-    Anchor, KeyboardInteractivity, Layer, LayerShell, LayerSurface,
-};
 use smithay_client_toolkit::shell::WaylandSurface;
-use wayland_client::protocol::wl_output::WlOutput;
+use smithay_client_toolkit::shell::wlr_layer::{Anchor, KeyboardInteractivity, Layer, LayerShell, LayerSurface};
 use wayland_client::QueueHandle;
+use wayland_client::protocol::wl_output::WlOutput;
 
 use super::connection::AppData;
 
@@ -59,13 +57,8 @@ impl LayerSurfaces {
         name: String,
     ) {
         let wl_surface = compositor_state.create_surface(qh);
-        let layer_surface = layer_shell.create_layer_surface(
-            qh,
-            wl_surface,
-            Layer::Background,
-            Some("hyprwall"),
-            Some(output),
-        );
+        let layer_surface =
+            layer_shell.create_layer_surface(qh, wl_surface, Layer::Background, Some("hyprwall"), Some(output));
         layer_surface.set_anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
         layer_surface.set_exclusive_zone(-1);
         layer_surface.set_keyboard_interactivity(KeyboardInteractivity::None);

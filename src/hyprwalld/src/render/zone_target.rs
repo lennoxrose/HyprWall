@@ -53,7 +53,11 @@ impl ZoneTarget {
                 0,
             );
 
-            Ok(Self { fbo, texture, bounding_box })
+            Ok(Self {
+                fbo,
+                texture,
+                bounding_box,
+            })
         }
     }
 
@@ -152,9 +156,24 @@ mod tests {
         // equals the bounding box's height, so both should sample from GL Y
         // = 0 (matches the behavior this codebase has actually verified
         // on real hardware).
-        let bounding_box = Rect { x: 0, y: 0, w: 3840, h: 1080 };
-        let left = Rect { x: 0, y: 0, w: 1920, h: 1080 };
-        let right = Rect { x: 1920, y: 0, w: 1920, h: 1080 };
+        let bounding_box = Rect {
+            x: 0,
+            y: 0,
+            w: 3840,
+            h: 1080,
+        };
+        let left = Rect {
+            x: 0,
+            y: 0,
+            w: 1920,
+            h: 1080,
+        };
+        let right = Rect {
+            x: 1920,
+            y: 0,
+            w: 1920,
+            h: 1080,
+        };
 
         assert_eq!(src_rect_for_monitor(bounding_box, left), (0, 0));
         assert_eq!(src_rect_for_monitor(bounding_box, right), (1920, 0));
@@ -169,9 +188,24 @@ mod tests {
         // correct for the top monitor only by coincidence here, and wrong
         // for the bottom monitor (which would have shown the top half of
         // the video instead of the bottom half).
-        let bounding_box = Rect { x: 0, y: 0, w: 1920, h: 1800 };
-        let top = Rect { x: 0, y: 0, w: 1920, h: 1000 };
-        let bottom = Rect { x: 0, y: 1000, w: 1920, h: 800 };
+        let bounding_box = Rect {
+            x: 0,
+            y: 0,
+            w: 1920,
+            h: 1800,
+        };
+        let top = Rect {
+            x: 0,
+            y: 0,
+            w: 1920,
+            h: 1000,
+        };
+        let bottom = Rect {
+            x: 0,
+            y: 1000,
+            w: 1920,
+            h: 800,
+        };
 
         assert_eq!(src_rect_for_monitor(bounding_box, top), (0, 800));
         assert_eq!(src_rect_for_monitor(bounding_box, bottom), (0, 0));
@@ -182,7 +216,12 @@ mod tests {
         // monitor_logical == bounding_box (the un-spanned case): always
         // (0, 0) regardless of logical position, and regardless of the
         // Y-axis fix.
-        let r = Rect { x: 100, y: 200, w: 1920, h: 1080 };
+        let r = Rect {
+            x: 100,
+            y: 200,
+            w: 1920,
+            h: 1080,
+        };
         assert_eq!(src_rect_for_monitor(r, r), (0, 0));
     }
 
@@ -191,9 +230,24 @@ mod tests {
         // bounding_box.y is non-zero (the topmost member monitor isn't at
         // Wayland y = 0), so the formula must subtract bounding_box.y, not
         // just use monitor_logical.y directly.
-        let bounding_box = Rect { x: 0, y: 500, w: 1920, h: 1800 };
-        let top = Rect { x: 0, y: 500, w: 1920, h: 1000 };
-        let bottom = Rect { x: 0, y: 1500, w: 1920, h: 800 };
+        let bounding_box = Rect {
+            x: 0,
+            y: 500,
+            w: 1920,
+            h: 1800,
+        };
+        let top = Rect {
+            x: 0,
+            y: 500,
+            w: 1920,
+            h: 1000,
+        };
+        let bottom = Rect {
+            x: 0,
+            y: 1500,
+            w: 1920,
+            h: 800,
+        };
 
         assert_eq!(src_rect_for_monitor(bounding_box, top), (0, 800));
         assert_eq!(src_rect_for_monitor(bounding_box, bottom), (0, 0));

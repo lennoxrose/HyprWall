@@ -44,7 +44,10 @@ mod tests {
     use super::*;
 
     fn mon(name: &str, x: i32, w: i32) -> Monitor {
-        Monitor { name: name.to_string(), logical: Rect { x, y: 0, w, h: 1080 } }
+        Monitor {
+            name: name.to_string(),
+            logical: Rect { x, y: 0, w, h: 1080 },
+        }
     }
 
     #[test]

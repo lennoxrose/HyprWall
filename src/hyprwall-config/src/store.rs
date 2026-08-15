@@ -45,7 +45,10 @@ mod tests {
         let path = dir.path().join("nested").join("config.toml");
         let cfg = Config {
             zones: vec![
-                ZoneConfig { monitors: vec!["eDP-1".to_string()], path: "/a.mp4".to_string() },
+                ZoneConfig {
+                    monitors: vec!["eDP-1".to_string()],
+                    path: "/a.mp4".to_string(),
+                },
                 ZoneConfig {
                     monitors: vec!["HDMI-A-1".to_string(), "HDMI-A-2".to_string()],
                     path: "/b.mp4".to_string(),

@@ -44,7 +44,10 @@ pub fn capture_monitor_snapshot(monitor_name: String) -> Result<String, String> 
     let dir = snapshot_dir()?;
     remove_previous_snapshots(&dir, &monitor_name);
 
-    let millis = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|e| e.to_string())?.as_millis();
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_millis();
     let dest = dir.join(format!("{monitor_name}-{millis}.png"));
     let status = std::process::Command::new("grim")
         .arg("-o")
@@ -55,5 +58,7 @@ pub fn capture_monitor_snapshot(monitor_name: String) -> Result<String, String> 
     if !status.success() {
         return Err(format!("grim exited with {status} capturing {monitor_name}"));
     }
-    dest.to_str().map(str::to_string).ok_or_else(|| "snapshot path is not valid UTF-8".to_string())
+    dest.to_str()
+        .map(str::to_string)
+        .ok_or_else(|| "snapshot path is not valid UTF-8".to_string())
 }

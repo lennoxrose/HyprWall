@@ -23,7 +23,10 @@ use wayland::connection::{AppData, WaylandBackend};
 /// are handled properly (and an unrecognized flag is a clear error) instead
 /// of silently being ignored and the daemon starting anyway.
 #[derive(Parser)]
-#[command(version, about = "HyprWall daemon: plays local video/image wallpapers as a Wayland layer-shell background")]
+#[command(
+    version,
+    about = "HyprWall daemon: plays local video/image wallpapers as a Wayland layer-shell background"
+)]
 struct Cli;
 
 /// Everything the single-threaded Wayland/IPC/render event loop shares.
@@ -65,7 +68,10 @@ fn main() -> anyhow::Result<()> {
     // missing file already returns `Config::default()` from `load` itself
     // (not an error), so this only fires for a genuinely corrupt file.
     if let Err(e) = hyprwall_config::store::load(&config_path) {
-        eprintln!("hyprwalld: failed to load {}: {e} (starting with no saved zones)", config_path.display());
+        eprintln!(
+            "hyprwalld: failed to load {}: {e} (starting with no saved zones)",
+            config_path.display()
+        );
     }
 
     let mut event_loop: EventLoop<Daemon> = EventLoop::try_new()?;
@@ -139,8 +145,11 @@ fn main() -> anyhow::Result<()> {
         )
         .map_err(|e| anyhow::anyhow!("failed to insert IPC listener into event loop: {}", e.error))?;
 
-    let mut daemon =
-        Daemon { app_data, state: AppState::new(Default::default(), config_path), render: RenderResources::new() };
+    let mut daemon = Daemon {
+        app_data,
+        state: AppState::new(Default::default(), config_path),
+        render: RenderResources::new(),
+    };
 
     loop {
         event_loop.dispatch(None, &mut daemon)?;
@@ -214,9 +223,10 @@ fn restore_saved_zones(daemon: &mut Daemon) {
         return;
     }
     for cfg in &saved.zones {
-        let already_covered = cfg.monitors.iter().any(|m| {
-            daemon.state.zones.zone_for_monitor(m).is_some() || daemon.render.is_monitor_live(m)
-        });
+        let already_covered = cfg
+            .monitors
+            .iter()
+            .any(|m| daemon.state.zones.zone_for_monitor(m).is_some() || daemon.render.is_monitor_live(m));
         if already_covered {
             continue;
         }

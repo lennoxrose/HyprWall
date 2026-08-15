@@ -6,9 +6,8 @@ use crate::commands::thumbnails;
 
 const VIDEO_EXTENSIONS: &[&str] = &["mp4", "webm", "mkv"];
 const IMAGE_EXTENSIONS: &[&str] = &[
-    "png", "jpg", "jpeg", "jfif", "gif", "webp", "bmp", "tif", "tiff", "tga", "ppm", "pgm", "pbm",
-    "pnm", "sgi", "dpx", "exr", "jp2", "j2k", "psd", "xpm", "pcx", "qoi", "heic", "heif", "avif",
-    "jxl",
+    "png", "jpg", "jpeg", "jfif", "gif", "webp", "bmp", "tif", "tiff", "tga", "ppm", "pgm", "pbm", "pnm", "sgi", "dpx",
+    "exr", "jp2", "j2k", "psd", "xpm", "pcx", "qoi", "heic", "heif", "avif", "jxl",
 ];
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -47,7 +46,11 @@ pub fn scan_library(folders: Vec<String>) -> Vec<WallpaperEntry> {
                     None
                 }
             };
-            entries.push(WallpaperEntry { path: path_str.to_string(), thumbnail_path, kind });
+            entries.push(WallpaperEntry {
+                path: path_str.to_string(),
+                thumbnail_path,
+                kind,
+            });
         }
     }
     entries.sort_by(|a, b| a.path.cmp(&b.path));

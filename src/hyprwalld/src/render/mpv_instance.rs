@@ -48,9 +48,7 @@ use std::rc::Rc;
 
 use hyprwall_config::model::{FitMode, WallpaperSettings};
 use libmpv2::Mpv;
-use libmpv2::render::{
-    OpenGLInitParams, RenderContext, RenderParam, RenderParamApiType, mpv_render_update,
-};
+use libmpv2::render::{OpenGLInitParams, RenderContext, RenderParam, RenderParamApiType, mpv_render_update};
 
 /// Resolves GL entry points for mpv. Owned by mpv only for the duration of
 /// `create_render_context`.
@@ -179,10 +177,13 @@ impl MpvInstance {
         self.mpv.set_property("panscan", panscan)?;
         self.mpv.set_property("volume", settings.volume.clamp(0.0, 100.0))?;
         self.mpv.set_property("mute", settings.volume <= 0.0)?;
-        self.mpv.set_property("brightness", settings.brightness.clamp(-100.0, 100.0))?;
-        self.mpv.set_property("contrast", settings.contrast.clamp(-100.0, 100.0))?;
+        self.mpv
+            .set_property("brightness", settings.brightness.clamp(-100.0, 100.0))?;
+        self.mpv
+            .set_property("contrast", settings.contrast.clamp(-100.0, 100.0))?;
         self.mpv.set_property("hue", settings.hue.clamp(-100.0, 100.0))?;
-        self.mpv.set_property("saturation", settings.saturation.clamp(-100.0, 100.0))?;
+        self.mpv
+            .set_property("saturation", settings.saturation.clamp(-100.0, 100.0))?;
         Ok(())
     }
 }

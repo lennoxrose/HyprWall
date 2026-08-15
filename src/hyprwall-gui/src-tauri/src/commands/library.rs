@@ -5,11 +5,24 @@ use serde::Serialize;
 use crate::commands::thumbnails;
 
 const VIDEO_EXTENSIONS: &[&str] = &["mp4", "webm", "mkv"];
+const IMAGE_EXTENSIONS: &[&str] = &[
+    "png", "jpg", "jpeg", "jfif", "gif", "webp", "bmp", "tif", "tiff", "tga", "ppm", "pgm", "pbm",
+    "pnm", "sgi", "dpx", "exr", "jp2", "j2k", "psd", "xpm", "pcx", "qoi", "heic", "heif", "avif",
+    "jxl",
+];
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum WallpaperKind {
+    Video,
+    Image,
+}
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct WallpaperEntry {
     pub path: String,
     pub thumbnail_path: Option<String>,
+    pub kind: WallpaperKind,
 }
 
 #[tauri::command]
@@ -25,9 +38,7 @@ pub fn scan_library(folders: Vec<String>) -> Vec<WallpaperEntry> {
         };
         for entry in read_dir.flatten() {
             let path = entry.path();
-            if !is_video_file(&path) {
-                continue;
-            }
+            let Some(kind) = classify(&path) else { continue };
             let Some(path_str) = path.to_str() else { continue };
             let thumbnail_path = match thumbnails::ensure_thumbnail(path_str) {
                 Ok(p) => p.to_str().map(str::to_string),
@@ -36,20 +47,25 @@ pub fn scan_library(folders: Vec<String>) -> Vec<WallpaperEntry> {
                     None
                 }
             };
-            entries.push(WallpaperEntry { path: path_str.to_string(), thumbnail_path });
+            entries.push(WallpaperEntry { path: path_str.to_string(), thumbnail_path, kind });
         }
     }
     entries.sort_by(|a, b| a.path.cmp(&b.path));
     entries
 }
 
-fn is_video_file(path: &Path) -> bool {
-    path.is_file()
-        && path
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| VIDEO_EXTENSIONS.contains(&e.to_lowercase().as_str()))
-            .unwrap_or(false)
+fn classify(path: &Path) -> Option<WallpaperKind> {
+    if !path.is_file() {
+        return None;
+    }
+    let ext = path.extension()?.to_str()?.to_lowercase();
+    if VIDEO_EXTENSIONS.contains(&ext.as_str()) {
+        Some(WallpaperKind::Video)
+    } else if IMAGE_EXTENSIONS.contains(&ext.as_str()) {
+        Some(WallpaperKind::Image)
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -90,5 +106,27 @@ mod tests {
             dir_b.path().to_str().unwrap().to_string(),
         ]);
         assert_eq!(entries.len(), 2);
+    }
+
+    #[test]
+    fn finds_image_files_and_tags_kind() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("wall.png"), b"").unwrap();
+        std::fs::write(dir.path().join("clip.mp4"), b"").unwrap();
+        std::fs::write(dir.path().join("notes.txt"), b"").unwrap();
+
+        let entries = scan_library(vec![dir.path().to_str().unwrap().to_string()]);
+        let kinds: Vec<(String, WallpaperKind)> = entries
+            .iter()
+            .map(|e| (e.path.rsplit('/').next().unwrap().to_string(), e.kind))
+            .collect();
+
+        assert_eq!(
+            kinds,
+            vec![
+                ("clip.mp4".to_string(), WallpaperKind::Video),
+                ("wall.png".to_string(), WallpaperKind::Image),
+            ]
+        );
     }
 }

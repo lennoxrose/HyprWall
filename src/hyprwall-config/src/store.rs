@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use super::model::Config;
+use crate::model::Config;
 
 pub fn default_config_path() -> PathBuf {
     dirs::config_dir()
@@ -29,7 +29,7 @@ pub fn save(path: &Path, cfg: &Config) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::model::ZoneConfig;
+    use crate::model::ZoneConfig;
 
     #[test]
     fn load_missing_file_returns_default() {

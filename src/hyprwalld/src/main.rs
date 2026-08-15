@@ -1,5 +1,4 @@
 mod app;
-mod config;
 mod ipc;
 mod monitor;
 mod monitor_registry;
@@ -38,7 +37,7 @@ struct Daemon {
 
 fn main() -> anyhow::Result<()> {
     let (backend, app_data) = WaylandBackend::new()?;
-    let config_path = config::store::default_config_path();
+    let config_path = hyprwall_config::store::default_config_path();
     // One informative diagnostic if the file exists but fails to parse; the
     // `Config` value itself is discarded here -- `restore_saved_zones` below
     // re-reads the file fresh on every relevant Wayland event instead of
@@ -46,7 +45,7 @@ fn main() -> anyhow::Result<()> {
     // isn't enough), so this call exists only for the startup message. A
     // missing file already returns `Config::default()` from `load` itself
     // (not an error), so this only fires for a genuinely corrupt file.
-    if let Err(e) = config::store::load(&config_path) {
+    if let Err(e) = hyprwall_config::store::load(&config_path) {
         eprintln!("hyprwalld: failed to load {}: {e} (starting with no saved zones)", config_path.display());
     }
 
@@ -182,7 +181,7 @@ fn handle_connection(conn: &mut UnixStream, daemon: &mut Daemon) {
 /// (others still waiting on a monitor), persisting now would rebuild the
 /// file from `ZoneManager`'s current partial state and drop the rest.
 fn restore_saved_zones(daemon: &mut Daemon) {
-    let saved = config::store::load(&daemon.state.config_path).unwrap_or_default();
+    let saved = hyprwall_config::store::load(&daemon.state.config_path).unwrap_or_default();
     if saved.zones.is_empty() {
         return;
     }

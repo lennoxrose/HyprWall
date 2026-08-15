@@ -1,8 +1,8 @@
 use hyprwall_ipc::{Command, Response};
 
 use crate::app::AppState;
-use crate::config::model::{Config, ZoneConfig};
-use crate::config::store;
+use hyprwall_config::model::{Config, ZoneConfig};
+use hyprwall_config::store;
 use crate::render::RenderResources;
 use crate::zone_manager::ZoneError;
 

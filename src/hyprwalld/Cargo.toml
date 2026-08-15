@@ -7,14 +7,12 @@ edition = "2024"
 anyhow = "1.0.104"
 calloop = "0.14.4"
 calloop-wayland-source = "0.4.1"
-dirs = "6.0.0"
 glow = "0.18.0"
+hyprwall-config = { version = "0.1.0", path = "../hyprwall-config" }
 hyprwall-ipc = { version = "0.1.0", path = "../hyprwall-ipc" }
 khronos-egl = { version = "6.0.0", features = ["dynamic"] }
 libmpv2 = { version = "6.0.0", features = ["render"] }
-serde = { version = "1.0.229", features = ["derive"] }
 smithay-client-toolkit = "0.21.1"
-toml = "1.1.4"
 wayland-client = "0.31.15"
 wayland-egl = "0.32.11"
 wayland-protocols-wlr = { version = "0.3.12", features = ["client"] }

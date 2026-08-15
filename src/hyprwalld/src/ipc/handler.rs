@@ -86,7 +86,11 @@ fn persist(state: &AppState) {
             Some(ZoneConfig { monitors: zone.monitors.clone(), path: zone.path.clone()? })
         })
         .collect();
-    let _ = store::save(&state.config_path, &Config { zones });
+    // `library_paths` is hyprwall-gui's field, not hyprwalld's -- hyprwalld
+    // only ever writes zones, so it must carry the existing value through
+    // rather than defaulting it away on every zone save.
+    let library_paths = store::load(&state.config_path).unwrap_or_default().library_paths;
+    let _ = store::save(&state.config_path, &Config { zones, library_paths });
 }
 
 #[cfg(test)]
@@ -167,6 +171,28 @@ mod tests {
         let loaded = store::load(&state.config_path).unwrap();
         assert_eq!(loaded.zones.len(), 1);
         assert_eq!(loaded.zones[0].path, "/pano.mp4");
+    }
+
+    #[test]
+    fn set_preserves_library_paths_written_by_the_gui() {
+        let mut state = state_with(&["eDP-1"]);
+        let mut render = RenderResources::new_headless_for_test();
+
+        // Simulate hyprwall-gui having already saved library folders before
+        // hyprwalld ever writes a zone.
+        let mut cfg = store::load(&state.config_path).unwrap();
+        cfg.library_paths = vec!["/home/u/Videos".to_string()];
+        store::save(&state.config_path, &cfg).unwrap();
+
+        handle_command(
+            &mut state,
+            Command::Set { monitors: vec!["eDP-1".to_string()], path: "/a.mp4".to_string() },
+            &mut render,
+        );
+
+        let loaded = store::load(&state.config_path).unwrap();
+        assert_eq!(loaded.library_paths, vec!["/home/u/Videos".to_string()]);
+        assert_eq!(loaded.zones.len(), 1, "the zone save itself should still have happened");
     }
 
     #[test]

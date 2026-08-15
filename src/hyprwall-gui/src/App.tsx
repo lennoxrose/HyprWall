@@ -31,6 +31,11 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [groupMode, setGroupMode] = useState(false);
   const [settingsSidebarPath, setSettingsSidebarPath] = useState<string | null>(null);
+
+  // Right-clicking the picture the sidebar is already open for closes it
+  // again -- the same tile is both the open and the close affordance.
+  const toggleSettingsSidebar = (path: string) =>
+    setSettingsSidebarPath((current) => (current === path ? null : path));
   const { selectedMonitors, toggleMonitor, clearSelectedMonitors, selectedWallpaper, setSelectedWallpaper } =
     useSelection();
 
@@ -236,7 +241,7 @@ export default function App() {
                 wallpapers={wallpapers}
                 selected={selectedWallpaper}
                 onSelect={selectWallpaper}
-                onOpenSettings={setSettingsSidebarPath}
+                onOpenSettings={toggleSettingsSidebar}
               />
             )}
           </>

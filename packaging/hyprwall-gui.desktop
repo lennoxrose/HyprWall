@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=HyprWall
+Comment=Local-video and image wallpapers for Hyprland
+Exec=hyprwall-gui
+Icon=hyprwall
+Terminal=false
+Categories=Utility;
+StartupWMClass=hyprwall-gui

@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use hyprwall_config::model::WallpaperSettings;
-use hyprwall_ipc::{Command, Response, client, default_socket_path, parse_response};
+use hyprwall_ipc::{client, default_socket_path, parse_response, Command, Response};
 
 #[tauri::command]
 pub fn get_wallpaper_settings(path: String) -> Result<WallpaperSettings, String> {
@@ -18,12 +18,11 @@ pub fn set_wallpaper_settings(path: String, settings: WallpaperSettings) -> Resu
     set_wallpaper_settings_at(&default_socket_path(), &path, settings)
 }
 
-fn set_wallpaper_settings_at(
-    socket_path: &Path,
-    path: &str,
-    settings: WallpaperSettings,
-) -> Result<(), String> {
-    let cmd = Command::SetWallpaperSettings { path: path.to_string(), settings };
+fn set_wallpaper_settings_at(socket_path: &Path, path: &str, settings: WallpaperSettings) -> Result<(), String> {
+    let cmd = Command::SetWallpaperSettings {
+        path: path.to_string(),
+        settings,
+    };
     let raw = client::send(socket_path, &cmd).map_err(|e| format!("hyprwalld unreachable: {e}"))?;
     match parse_response(&raw) {
         Response::Ok => Ok(()),
@@ -51,7 +50,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");
         let mut cfg = hyprwall_config::store::load(&path).unwrap();
-        let settings = WallpaperSettings { zoom: 1.4, ..WallpaperSettings::default() };
+        let settings = WallpaperSettings {
+            zoom: 1.4,
+            ..WallpaperSettings::default()
+        };
         cfg.wallpaper_settings.insert("/a.jpg".to_string(), settings);
         hyprwall_config::store::save(&path, &cfg).unwrap();
 

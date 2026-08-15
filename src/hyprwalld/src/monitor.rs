@@ -18,7 +18,12 @@ impl Rect {
             max_x = max_x.max(r.x + r.w);
             max_y = max_y.max(r.y + r.h);
         }
-        Some(Rect { x: min_x, y: min_y, w: max_x - min_x, h: max_y - min_y })
+        Some(Rect {
+            x: min_x,
+            y: min_y,
+            w: max_x - min_x,
+            h: max_y - min_y,
+        })
     }
 }
 
@@ -34,15 +39,38 @@ mod tests {
 
     #[test]
     fn union_of_single_rect_is_itself() {
-        let r = Rect { x: 0, y: 0, w: 1920, h: 1080 };
+        let r = Rect {
+            x: 0,
+            y: 0,
+            w: 1920,
+            h: 1080,
+        };
         assert_eq!(Rect::union(&[r]), Some(r));
     }
 
     #[test]
     fn union_of_two_side_by_side_rects() {
-        let a = Rect { x: 0, y: 0, w: 1920, h: 1080 };
-        let b = Rect { x: 1920, y: 0, w: 1920, h: 1080 };
-        assert_eq!(Rect::union(&[a, b]), Some(Rect { x: 0, y: 0, w: 3840, h: 1080 }));
+        let a = Rect {
+            x: 0,
+            y: 0,
+            w: 1920,
+            h: 1080,
+        };
+        let b = Rect {
+            x: 1920,
+            y: 0,
+            w: 1920,
+            h: 1080,
+        };
+        assert_eq!(
+            Rect::union(&[a, b]),
+            Some(Rect {
+                x: 0,
+                y: 0,
+                w: 3840,
+                h: 1080
+            })
+        );
     }
 
     #[test]

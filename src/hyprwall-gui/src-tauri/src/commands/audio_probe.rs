@@ -6,9 +6,9 @@
 //! finishes) -- this probe never actually plays anything (`pause=yes`), so
 //! it never reaches a natural `EndFile` on its own.
 
-use libmpv2::Mpv;
 use libmpv2::events::Event;
 use libmpv2::mpv_end_file_reason;
+use libmpv2::Mpv;
 
 #[tauri::command]
 pub fn has_audio_track(path: String) -> Result<bool, String> {
@@ -32,8 +32,7 @@ fn has_audio_track_impl(path: &str) -> anyhow::Result<bool> {
 
     let count: i64 = mpv.get_property("track-list/count").unwrap_or(0);
     for i in 0..count {
-        let track_type: String =
-            mpv.get_property(&format!("track-list/{i}/type")).unwrap_or_default();
+        let track_type: String = mpv.get_property(&format!("track-list/{i}/type")).unwrap_or_default();
         if track_type == "audio" {
             return Ok(true);
         }

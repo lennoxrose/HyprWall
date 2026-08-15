@@ -11,6 +11,10 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(registry: MonitorRegistry, config_path: PathBuf) -> Self {
-        Self { registry, zones: ZoneManager::new(), config_path }
+        Self {
+            registry,
+            zones: ZoneManager::new(),
+            config_path,
+        }
     }
 }

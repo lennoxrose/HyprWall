@@ -24,13 +24,29 @@ fn list_monitors_at(socket_path: &std::path::Path) -> Result<Vec<MonitorState>, 
     };
 
     let mut states = Vec::with_capacity(infos.len());
-    for MonitorInfo { name, x, y, w, h, group } in infos {
+    for MonitorInfo {
+        name,
+        x,
+        y,
+        w,
+        h,
+        group,
+    } in infos
+    {
         let current_path = match send_and_parse(socket_path, Command::Get { monitor: name.clone() })? {
             Response::Path(p) => Some(p),
             Response::Error(_) => None,
             other => return Err(format!("unexpected response to get: {other:?}")),
         };
-        states.push(MonitorState { name, x, y, w, h, current_path, group });
+        states.push(MonitorState {
+            name,
+            x,
+            y,
+            w,
+            h,
+            current_path,
+            group,
+        });
     }
     Ok(states)
 }
@@ -140,7 +156,13 @@ mod tests {
             conn.write_all(b"ok").unwrap();
         });
 
-        let resp = send_and_parse(&socket_path, Command::Unset { monitor: "eDP-1".to_string() }).unwrap();
+        let resp = send_and_parse(
+            &socket_path,
+            Command::Unset {
+                monitor: "eDP-1".to_string(),
+            },
+        )
+        .unwrap();
         server.join().unwrap();
         assert_eq!(resp, Response::Ok);
     }

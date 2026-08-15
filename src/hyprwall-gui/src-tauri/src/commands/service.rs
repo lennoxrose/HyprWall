@@ -7,7 +7,9 @@ fn parse_is_enabled(unit: &str, stdout: &str) -> Result<bool, String> {
     match stdout.trim() {
         "enabled" => Ok(true),
         "disabled" => Ok(false),
-        other => Err(format!("systemctl reports {unit} as {other:?} -- is hyprwall installed as a package?")),
+        other => Err(format!(
+            "systemctl reports {unit} as {other:?} -- is hyprwall installed as a package?"
+        )),
     }
 }
 

@@ -118,7 +118,11 @@ impl ZoneManager {
             id
         };
 
-        Ok(ZoneApplyOutcome { zone_id, bounding_box, dissolved_zone_ids })
+        Ok(ZoneApplyOutcome {
+            zone_id,
+            bounding_box,
+            dissolved_zone_ids,
+        })
     }
 
     /// Removes `monitor` from whatever zone currently holds it (if any),
@@ -167,7 +171,10 @@ impl ZoneManager {
             return ClearOutcome::Dissolved { zone_id };
         }
         zone.path = None;
-        ClearOutcome::Cleared { zone_id: zone.id, monitors: zone.monitors.clone() }
+        ClearOutcome::Cleared {
+            zone_id: zone.id,
+            monitors: zone.monitors.clone(),
+        }
     }
 
     pub fn zone_for_monitor(&self, monitor: &str) -> Option<&Zone> {
@@ -182,7 +189,11 @@ impl ZoneManager {
     /// Used by `Command::SetWallpaperSettings` to find which live
     /// `MpvInstance`s a settings change should reach immediately.
     pub fn zone_ids_with_path(&self, path: &str) -> Vec<u64> {
-        self.zones.iter().filter(|z| z.path.as_deref() == Some(path)).map(|z| z.id).collect()
+        self.zones
+            .iter()
+            .filter(|z| z.path.as_deref() == Some(path))
+            .map(|z| z.id)
+            .collect()
     }
 }
 
@@ -196,7 +207,12 @@ mod tests {
         for (i, name) in names.iter().enumerate() {
             reg.insert(Monitor {
                 name: name.to_string(),
-                logical: Rect { x: (i as i32) * 1920, y: 0, w: 1920, h: 1080 },
+                logical: Rect {
+                    x: (i as i32) * 1920,
+                    y: 0,
+                    w: 1920,
+                    h: 1080,
+                },
             });
         }
         reg
@@ -206,7 +222,8 @@ mod tests {
     fn zone_ids_with_path_finds_a_single_match() {
         let mut zm = ZoneManager::new();
         let registry = registry_with(&["eDP-1"]);
-        zm.apply_set(&["eDP-1".to_string()], "/a.jpg".to_string(), &registry).unwrap();
+        zm.apply_set(&["eDP-1".to_string()], "/a.jpg".to_string(), &registry)
+            .unwrap();
         let zone_id = zm.zone_for_monitor("eDP-1").unwrap().id;
 
         assert_eq!(zm.zone_ids_with_path("/a.jpg"), vec![zone_id]);
@@ -216,7 +233,8 @@ mod tests {
     fn zone_ids_with_path_is_empty_when_nothing_matches() {
         let mut zm = ZoneManager::new();
         let registry = registry_with(&["eDP-1"]);
-        zm.apply_set(&["eDP-1".to_string()], "/a.jpg".to_string(), &registry).unwrap();
+        zm.apply_set(&["eDP-1".to_string()], "/a.jpg".to_string(), &registry)
+            .unwrap();
 
         assert_eq!(zm.zone_ids_with_path("/other.jpg"), Vec::<u64>::new());
     }
@@ -225,8 +243,10 @@ mod tests {
     fn zone_ids_with_path_only_returns_matching_zones() {
         let mut zm = ZoneManager::new();
         let registry = registry_with(&["eDP-1", "HDMI-A-1"]);
-        zm.apply_set(&["eDP-1".to_string()], "/a.jpg".to_string(), &registry).unwrap();
-        zm.apply_set(&["HDMI-A-1".to_string()], "/b.jpg".to_string(), &registry).unwrap();
+        zm.apply_set(&["eDP-1".to_string()], "/a.jpg".to_string(), &registry)
+            .unwrap();
+        zm.apply_set(&["HDMI-A-1".to_string()], "/b.jpg".to_string(), &registry)
+            .unwrap();
         let a_zone_id = zm.zone_for_monitor("eDP-1").unwrap().id;
 
         assert_eq!(zm.zone_ids_with_path("/a.jpg"), vec![a_zone_id]);
@@ -236,8 +256,18 @@ mod tests {
     fn set_single_monitor_forms_zone_of_one() {
         let reg = registry_with(&["eDP-1"]);
         let mut zm = ZoneManager::new();
-        let outcome = zm.apply_set(&["eDP-1".to_string()], "/a.mp4".to_string(), &reg).unwrap();
-        assert_eq!(outcome.bounding_box, Rect { x: 0, y: 0, w: 1920, h: 1080 });
+        let outcome = zm
+            .apply_set(&["eDP-1".to_string()], "/a.mp4".to_string(), &reg)
+            .unwrap();
+        assert_eq!(
+            outcome.bounding_box,
+            Rect {
+                x: 0,
+                y: 0,
+                w: 1920,
+                h: 1080
+            }
+        );
         assert!(outcome.dissolved_zone_ids.is_empty());
         assert_eq!(zm.path_for_monitor("eDP-1"), Some("/a.mp4"));
     }
@@ -247,20 +277,41 @@ mod tests {
         let reg = registry_with(&["eDP-1", "HDMI-A-1"]);
         let mut zm = ZoneManager::new();
         let outcome = zm
-            .apply_set(&["eDP-1".to_string(), "HDMI-A-1".to_string()], "/pano.mp4".to_string(), &reg)
+            .apply_set(
+                &["eDP-1".to_string(), "HDMI-A-1".to_string()],
+                "/pano.mp4".to_string(),
+                &reg,
+            )
             .unwrap();
-        assert_eq!(outcome.bounding_box, Rect { x: 0, y: 0, w: 3840, h: 1080 });
-        assert_eq!(zm.zone_for_monitor("eDP-1").unwrap().id, zm.zone_for_monitor("HDMI-A-1").unwrap().id);
+        assert_eq!(
+            outcome.bounding_box,
+            Rect {
+                x: 0,
+                y: 0,
+                w: 3840,
+                h: 1080
+            }
+        );
+        assert_eq!(
+            zm.zone_for_monitor("eDP-1").unwrap().id,
+            zm.zone_for_monitor("HDMI-A-1").unwrap().id
+        );
     }
 
     #[test]
     fn re_setting_one_monitor_splits_it_out_of_a_zone() {
         let reg = registry_with(&["eDP-1", "HDMI-A-1"]);
         let mut zm = ZoneManager::new();
-        zm.apply_set(&["eDP-1".to_string(), "HDMI-A-1".to_string()], "/pano.mp4".to_string(), &reg)
-            .unwrap();
+        zm.apply_set(
+            &["eDP-1".to_string(), "HDMI-A-1".to_string()],
+            "/pano.mp4".to_string(),
+            &reg,
+        )
+        .unwrap();
 
-        let outcome = zm.apply_set(&["eDP-1".to_string()], "/solo.mp4".to_string(), &reg).unwrap();
+        let outcome = zm
+            .apply_set(&["eDP-1".to_string()], "/solo.mp4".to_string(), &reg)
+            .unwrap();
 
         assert_eq!(zm.path_for_monitor("eDP-1"), Some("/solo.mp4"));
         // The old two-monitor zone had HDMI-A-1 left in it after eDP-1 was pulled out,
@@ -273,14 +324,25 @@ mod tests {
     fn re_setting_both_members_alone_dissolves_the_zone() {
         let reg = registry_with(&["eDP-1", "HDMI-A-1"]);
         let mut zm = ZoneManager::new();
-        zm.apply_set(&["eDP-1".to_string(), "HDMI-A-1".to_string()], "/pano.mp4".to_string(), &reg)
-            .unwrap();
+        zm.apply_set(
+            &["eDP-1".to_string(), "HDMI-A-1".to_string()],
+            "/pano.mp4".to_string(),
+            &reg,
+        )
+        .unwrap();
         let zone_id = zm.zone_for_monitor("eDP-1").unwrap().id;
 
-        let outcome = zm.apply_set(&["eDP-1".to_string()], "/solo.mp4".to_string(), &reg).unwrap();
-        assert!(outcome.dissolved_zone_ids.is_empty(), "HDMI-A-1 still holds the old zone open");
+        let outcome = zm
+            .apply_set(&["eDP-1".to_string()], "/solo.mp4".to_string(), &reg)
+            .unwrap();
+        assert!(
+            outcome.dissolved_zone_ids.is_empty(),
+            "HDMI-A-1 still holds the old zone open"
+        );
 
-        let outcome2 = zm.apply_set(&["HDMI-A-1".to_string()], "/other.mp4".to_string(), &reg).unwrap();
+        let outcome2 = zm
+            .apply_set(&["HDMI-A-1".to_string()], "/other.mp4".to_string(), &reg)
+            .unwrap();
         assert_eq!(outcome2.dissolved_zone_ids, vec![zone_id]);
     }
 
@@ -288,7 +350,9 @@ mod tests {
     fn unknown_monitor_is_rejected() {
         let reg = registry_with(&["eDP-1"]);
         let mut zm = ZoneManager::new();
-        let err = zm.apply_set(&["eDP-9".to_string()], "/a.mp4".to_string(), &reg).unwrap_err();
+        let err = zm
+            .apply_set(&["eDP-9".to_string()], "/a.mp4".to_string(), &reg)
+            .unwrap_err();
         assert_eq!(err, ZoneError::UnknownMonitor("eDP-9".to_string()));
     }
 
@@ -296,7 +360,8 @@ mod tests {
     fn remove_monitor_dissolves_a_single_monitor_zone() {
         let reg = registry_with(&["eDP-1"]);
         let mut zm = ZoneManager::new();
-        zm.apply_set(&["eDP-1".to_string()], "/a.mp4".to_string(), &reg).unwrap();
+        zm.apply_set(&["eDP-1".to_string()], "/a.mp4".to_string(), &reg)
+            .unwrap();
         let zone_id = zm.zone_for_monitor("eDP-1").unwrap().id;
 
         let dissolved = zm.remove_monitor("eDP-1");
@@ -309,8 +374,12 @@ mod tests {
     fn remove_monitor_keeps_a_multi_monitor_zone_alive_for_the_rest() {
         let reg = registry_with(&["eDP-1", "HDMI-A-1"]);
         let mut zm = ZoneManager::new();
-        zm.apply_set(&["eDP-1".to_string(), "HDMI-A-1".to_string()], "/pano.mp4".to_string(), &reg)
-            .unwrap();
+        zm.apply_set(
+            &["eDP-1".to_string(), "HDMI-A-1".to_string()],
+            "/pano.mp4".to_string(),
+            &reg,
+        )
+        .unwrap();
 
         let dissolved = zm.remove_monitor("eDP-1");
 
@@ -335,7 +404,8 @@ mod tests {
     fn clear_path_dissolves_a_solo_zone() {
         let reg = registry_with(&["eDP-1"]);
         let mut zm = ZoneManager::new();
-        zm.apply_set(&["eDP-1".to_string()], "/a.mp4".to_string(), &reg).unwrap();
+        zm.apply_set(&["eDP-1".to_string()], "/a.mp4".to_string(), &reg)
+            .unwrap();
         let zone_id = zm.zone_for_monitor("eDP-1").unwrap().id;
 
         assert_eq!(zm.clear_path("eDP-1"), ClearOutcome::Dissolved { zone_id });
@@ -346,27 +416,42 @@ mod tests {
     fn clear_path_on_a_group_keeps_every_member_but_drops_the_path() {
         let reg = registry_with(&["eDP-1", "HDMI-A-1"]);
         let mut zm = ZoneManager::new();
-        zm.apply_set(&["eDP-1".to_string(), "HDMI-A-1".to_string()], "/pano.mp4".to_string(), &reg)
-            .unwrap();
+        zm.apply_set(
+            &["eDP-1".to_string(), "HDMI-A-1".to_string()],
+            "/pano.mp4".to_string(),
+            &reg,
+        )
+        .unwrap();
         let zone_id = zm.zone_for_monitor("eDP-1").unwrap().id;
 
         let outcome = zm.clear_path("eDP-1");
         assert_eq!(
             outcome,
-            ClearOutcome::Cleared { zone_id, monitors: vec!["eDP-1".to_string(), "HDMI-A-1".to_string()] }
+            ClearOutcome::Cleared {
+                zone_id,
+                monitors: vec!["eDP-1".to_string(), "HDMI-A-1".to_string()]
+            }
         );
         assert!(zm.path_for_monitor("eDP-1").is_none());
         assert!(zm.path_for_monitor("HDMI-A-1").is_none());
         assert_eq!(zm.zone_for_monitor("eDP-1").unwrap().id, zone_id);
-        assert_eq!(zm.zone_for_monitor("HDMI-A-1").unwrap().id, zone_id, "group must survive intact");
+        assert_eq!(
+            zm.zone_for_monitor("HDMI-A-1").unwrap().id,
+            zone_id,
+            "group must survive intact"
+        );
     }
 
     #[test]
     fn clear_path_twice_in_a_row_is_idempotent() {
         let reg = registry_with(&["eDP-1", "HDMI-A-1"]);
         let mut zm = ZoneManager::new();
-        zm.apply_set(&["eDP-1".to_string(), "HDMI-A-1".to_string()], "/pano.mp4".to_string(), &reg)
-            .unwrap();
+        zm.apply_set(
+            &["eDP-1".to_string(), "HDMI-A-1".to_string()],
+            "/pano.mp4".to_string(),
+            &reg,
+        )
+        .unwrap();
 
         zm.clear_path("eDP-1");
         assert_eq!(zm.clear_path("HDMI-A-1"), ClearOutcome::AlreadyCleared);

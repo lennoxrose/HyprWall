@@ -1,5 +1,5 @@
-mod command;
 pub mod client;
+mod command;
 mod response;
 
 pub use client::default_socket_path;

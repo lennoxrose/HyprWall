@@ -28,7 +28,11 @@ impl Response {
             Response::MonitorList(infos) => infos
                 .iter()
                 .map(|m| {
-                    let group = if m.group.is_empty() { "-".to_string() } else { m.group.join(",") };
+                    let group = if m.group.is_empty() {
+                        "-".to_string()
+                    } else {
+                        m.group.join(",")
+                    };
                     format!("{} {},{},{},{} {}", m.name, m.x, m.y, m.w, m.h, group)
                 })
                 .collect::<Vec<_>>()
@@ -74,9 +78,20 @@ fn parse_monitor_info_line(line: &str) -> Option<MonitorInfo> {
         return None;
     }
 
-    let group = if group == "-" { Vec::new() } else { group.split(',').map(str::to_string).collect() };
+    let group = if group == "-" {
+        Vec::new()
+    } else {
+        group.split(',').map(str::to_string).collect()
+    };
 
-    Some(MonitorInfo { name: name.to_string(), x, y, w, h, group })
+    Some(MonitorInfo {
+        name: name.to_string(),
+        x,
+        y,
+        w,
+        h,
+        group,
+    })
 }
 
 #[cfg(test)]
@@ -103,8 +118,22 @@ mod tests {
     #[test]
     fn monitor_list_round_trips() {
         let r = Response::MonitorList(vec![
-            MonitorInfo { name: "eDP-1".to_string(), x: 0, y: 0, w: 1920, h: 1080, group: vec!["eDP-1".to_string(), "HDMI-A-1".to_string()] },
-            MonitorInfo { name: "HDMI-A-1".to_string(), x: 1920, y: 0, w: 1920, h: 1080, group: vec!["eDP-1".to_string(), "HDMI-A-1".to_string()] },
+            MonitorInfo {
+                name: "eDP-1".to_string(),
+                x: 0,
+                y: 0,
+                w: 1920,
+                h: 1080,
+                group: vec!["eDP-1".to_string(), "HDMI-A-1".to_string()],
+            },
+            MonitorInfo {
+                name: "HDMI-A-1".to_string(),
+                x: 1920,
+                y: 0,
+                w: 1920,
+                h: 1080,
+                group: vec!["eDP-1".to_string(), "HDMI-A-1".to_string()],
+            },
         ]);
         assert_eq!(parse_response(&r.to_wire()), r);
     }

@@ -110,7 +110,10 @@ mod tests {
         let mut cfg = Config::default();
         cfg.wallpaper_settings.insert(
             "/a.jpg".to_string(),
-            WallpaperSettings { zoom: 1.5, ..WallpaperSettings::default() },
+            WallpaperSettings {
+                zoom: 1.5,
+                ..WallpaperSettings::default()
+            },
         );
         let text = toml::to_string_pretty(&cfg).unwrap();
         let round_tripped: Config = toml::from_str(&text).unwrap();

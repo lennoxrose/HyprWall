@@ -1,19 +1,19 @@
 use hyprwall_ipc::{Command, MonitorInfo, Response};
 
 use crate::app::AppState;
-use hyprwall_config::model::{Config, WallpaperSettings, ZoneConfig};
-use hyprwall_config::store;
 use crate::render::RenderResources;
 use crate::zone_manager::{ClearOutcome as ZoneClearOutcome, ZoneError};
+use hyprwall_config::model::{Config, WallpaperSettings, ZoneConfig};
+use hyprwall_config::store;
 
 /// `render` is `&mut` (not pure logic, unlike the rest of this function)
 /// because `Command::Set` may need to create/replace a zone's `MpvInstance`
-/// + `ZoneTarget`, and `Command::Pause`/`Play` need to reach the zone's live
-/// `MpvInstance` to actually toggle playback -- see `render::RenderResources`.
-/// Tests that don't need real GL/mpv pass `RenderResources::
-/// new_headless_for_test()`, under which the GL-touching parts of `Set`
-/// silently no-op while the pure `ZoneManager` bookkeeping they assert on
-/// still runs.
+/// and `ZoneTarget`, and `Command::Pause`/`Play` need to reach the zone's
+/// live `MpvInstance` to actually toggle playback -- see
+/// `render::RenderResources`. Tests that don't need real GL/mpv pass
+/// `RenderResources::new_headless_for_test()`, under which the GL-touching
+/// parts of `Set` silently no-op while the pure `ZoneManager` bookkeeping
+/// they assert on still runs.
 pub fn handle_command(state: &mut AppState, cmd: Command, render: &mut RenderResources) -> Response {
     match cmd {
         Command::MonitorList => Response::MonitorList(
@@ -23,10 +23,20 @@ pub fn handle_command(state: &mut AppState, cmd: Command, render: &mut RenderRes
                 .into_iter()
                 .filter_map(|name| {
                     let m = state.registry.get(&name)?;
-                    let mut group: Vec<String> =
-                        state.zones.zone_for_monitor(&name).map(|z| z.monitors.clone()).unwrap_or_default();
+                    let mut group: Vec<String> = state
+                        .zones
+                        .zone_for_monitor(&name)
+                        .map(|z| z.monitors.clone())
+                        .unwrap_or_default();
                     group.sort();
-                    Some(MonitorInfo { name: m.name.clone(), x: m.logical.x, y: m.logical.y, w: m.logical.w, h: m.logical.h, group })
+                    Some(MonitorInfo {
+                        name: m.name.clone(),
+                        x: m.logical.x,
+                        y: m.logical.y,
+                        w: m.logical.w,
+                        h: m.logical.h,
+                        group,
+                    })
                 })
                 .collect(),
         ),
@@ -137,7 +147,10 @@ fn persist(state: &AppState) {
             if zone.monitors.first() != Some(&name) {
                 return None; // only emit each zone once, keyed by its first monitor
             }
-            Some(ZoneConfig { monitors: zone.monitors.clone(), path: zone.path.clone()? })
+            Some(ZoneConfig {
+                monitors: zone.monitors.clone(),
+                path: zone.path.clone()?,
+            })
         })
         .collect();
     // `library_paths` and `wallpaper_settings` are written elsewhere
@@ -148,7 +161,11 @@ fn persist(state: &AppState) {
     let existing = store::load(&state.config_path).unwrap_or_default();
     let _ = store::save(
         &state.config_path,
-        &Config { zones, library_paths: existing.library_paths, wallpaper_settings: existing.wallpaper_settings },
+        &Config {
+            zones,
+            library_paths: existing.library_paths,
+            wallpaper_settings: existing.wallpaper_settings,
+        },
     );
 }
 
@@ -177,7 +194,12 @@ mod tests {
         for (i, name) in names.iter().enumerate() {
             registry.insert(Monitor {
                 name: name.to_string(),
-                logical: Rect { x: (i as i32) * 1920, y: 0, w: 1920, h: 1080 },
+                logical: Rect {
+                    x: (i as i32) * 1920,
+                    y: 0,
+                    w: 1920,
+                    h: 1080,
+                },
             });
         }
         let dir = tempfile::tempdir().unwrap();
@@ -192,8 +214,22 @@ mod tests {
         assert_eq!(
             resp,
             Response::MonitorList(vec![
-                MonitorInfo { name: "HDMI-A-1".to_string(), x: 1920, y: 0, w: 1920, h: 1080, group: vec![] },
-                MonitorInfo { name: "eDP-1".to_string(), x: 0, y: 0, w: 1920, h: 1080, group: vec![] },
+                MonitorInfo {
+                    name: "HDMI-A-1".to_string(),
+                    x: 1920,
+                    y: 0,
+                    w: 1920,
+                    h: 1080,
+                    group: vec![]
+                },
+                MonitorInfo {
+                    name: "eDP-1".to_string(),
+                    x: 0,
+                    y: 0,
+                    w: 1920,
+                    h: 1080,
+                    group: vec![]
+                },
             ])
         );
     }
@@ -204,7 +240,10 @@ mod tests {
         let mut render = RenderResources::new_headless_for_test();
         handle_command(
             &mut state,
-            Command::Set { monitors: vec!["eDP-1".to_string()], path: "/a.mp4".to_string() },
+            Command::Set {
+                monitors: vec!["eDP-1".to_string()],
+                path: "/a.mp4".to_string(),
+            },
             &mut render,
         );
 
@@ -236,10 +275,16 @@ mod tests {
         );
 
         let resp = handle_command(&mut state, Command::MonitorList, &mut render);
-        let Response::MonitorList(infos) = resp else { panic!("expected MonitorList") };
+        let Response::MonitorList(infos) = resp else {
+            panic!("expected MonitorList")
+        };
         let expected_group = vec!["HDMI-A-1".to_string(), "eDP-1".to_string()];
         for info in &infos {
-            assert_eq!(info.group, expected_group, "monitor {} should list both zone members sorted", info.name);
+            assert_eq!(
+                info.group, expected_group,
+                "monitor {} should list both zone members sorted",
+                info.name
+            );
         }
     }
 
@@ -249,13 +294,21 @@ mod tests {
         let mut render = RenderResources::new_headless_for_test();
         let set_resp = handle_command(
             &mut state,
-            Command::Set { monitors: vec!["eDP-1".to_string()], path: "/a.mp4".to_string() },
+            Command::Set {
+                monitors: vec!["eDP-1".to_string()],
+                path: "/a.mp4".to_string(),
+            },
             &mut render,
         );
         assert_eq!(set_resp, Response::Ok);
 
-        let get_resp =
-            handle_command(&mut state, Command::Get { monitor: "eDP-1".to_string() }, &mut render);
+        let get_resp = handle_command(
+            &mut state,
+            Command::Get {
+                monitor: "eDP-1".to_string(),
+            },
+            &mut render,
+        );
         assert_eq!(get_resp, Response::Path("/a.mp4".to_string()));
     }
 
@@ -265,7 +318,10 @@ mod tests {
         let mut render = RenderResources::new_headless_for_test();
         let resp = handle_command(
             &mut state,
-            Command::Set { monitors: vec!["eDP-9".to_string()], path: "/a.mp4".to_string() },
+            Command::Set {
+                monitors: vec!["eDP-9".to_string()],
+                path: "/a.mp4".to_string(),
+            },
             &mut render,
         );
         assert_eq!(resp, Response::Error("unknown monitor eDP-9".to_string()));
@@ -275,8 +331,13 @@ mod tests {
     fn get_before_set_returns_error() {
         let mut state = state_with(&["eDP-1"]);
         let mut render = RenderResources::new_headless_for_test();
-        let resp =
-            handle_command(&mut state, Command::Get { monitor: "eDP-1".to_string() }, &mut render);
+        let resp = handle_command(
+            &mut state,
+            Command::Get {
+                monitor: "eDP-1".to_string(),
+            },
+            &mut render,
+        );
         assert_eq!(resp, Response::Error("no wallpaper set for eDP-1".to_string()));
     }
 
@@ -284,8 +345,13 @@ mod tests {
     fn unset_on_a_monitor_with_no_wallpaper_returns_error() {
         let mut state = state_with(&["eDP-1"]);
         let mut render = RenderResources::new_headless_for_test();
-        let resp =
-            handle_command(&mut state, Command::Unset { monitor: "eDP-1".to_string() }, &mut render);
+        let resp = handle_command(
+            &mut state,
+            Command::Unset {
+                monitor: "eDP-1".to_string(),
+            },
+            &mut render,
+        );
         assert_eq!(resp, Response::Error("no wallpaper set for eDP-1".to_string()));
     }
 
@@ -295,16 +361,29 @@ mod tests {
         let mut render = RenderResources::new_headless_for_test();
         handle_command(
             &mut state,
-            Command::Set { monitors: vec!["eDP-1".to_string()], path: "/a.mp4".to_string() },
+            Command::Set {
+                monitors: vec!["eDP-1".to_string()],
+                path: "/a.mp4".to_string(),
+            },
             &mut render,
         );
 
-        let resp =
-            handle_command(&mut state, Command::Unset { monitor: "eDP-1".to_string() }, &mut render);
+        let resp = handle_command(
+            &mut state,
+            Command::Unset {
+                monitor: "eDP-1".to_string(),
+            },
+            &mut render,
+        );
         assert_eq!(resp, Response::Ok);
 
-        let get_resp =
-            handle_command(&mut state, Command::Get { monitor: "eDP-1".to_string() }, &mut render);
+        let get_resp = handle_command(
+            &mut state,
+            Command::Get {
+                monitor: "eDP-1".to_string(),
+            },
+            &mut render,
+        );
         assert_eq!(get_resp, Response::Error("no wallpaper set for eDP-1".to_string()));
     }
 
@@ -314,11 +393,20 @@ mod tests {
         let mut render = RenderResources::new_headless_for_test();
         handle_command(
             &mut state,
-            Command::Set { monitors: vec!["eDP-1".to_string()], path: "/a.mp4".to_string() },
+            Command::Set {
+                monitors: vec!["eDP-1".to_string()],
+                path: "/a.mp4".to_string(),
+            },
             &mut render,
         );
 
-        handle_command(&mut state, Command::Unset { monitor: "eDP-1".to_string() }, &mut render);
+        handle_command(
+            &mut state,
+            Command::Unset {
+                monitor: "eDP-1".to_string(),
+            },
+            &mut render,
+        );
 
         let loaded = store::load(&state.config_path).unwrap();
         assert!(loaded.zones.is_empty());
@@ -337,27 +425,44 @@ mod tests {
             &mut render,
         );
 
-        let resp =
-            handle_command(&mut state, Command::Unset { monitor: "eDP-1".to_string() }, &mut render);
+        let resp = handle_command(
+            &mut state,
+            Command::Unset {
+                monitor: "eDP-1".to_string(),
+            },
+            &mut render,
+        );
         assert_eq!(resp, Response::Ok);
 
         // The path is zone-wide, so clearing it via either member clears
         // playback for both -- but the group itself must survive, not split.
-        let edp1_get =
-            handle_command(&mut state, Command::Get { monitor: "eDP-1".to_string() }, &mut render);
+        let edp1_get = handle_command(
+            &mut state,
+            Command::Get {
+                monitor: "eDP-1".to_string(),
+            },
+            &mut render,
+        );
         assert_eq!(edp1_get, Response::Error("no wallpaper set for eDP-1".to_string()));
-        let hdmi_get =
-            handle_command(&mut state, Command::Get { monitor: "HDMI-A-1".to_string() }, &mut render);
+        let hdmi_get = handle_command(
+            &mut state,
+            Command::Get {
+                monitor: "HDMI-A-1".to_string(),
+            },
+            &mut render,
+        );
         assert_eq!(hdmi_get, Response::Error("no wallpaper set for HDMI-A-1".to_string()));
 
-        let Response::MonitorList(infos) =
-            handle_command(&mut state, Command::MonitorList, &mut render)
-        else {
+        let Response::MonitorList(infos) = handle_command(&mut state, Command::MonitorList, &mut render) else {
             panic!("expected MonitorList")
         };
         let expected_group = vec!["HDMI-A-1".to_string(), "eDP-1".to_string()];
         for info in &infos {
-            assert_eq!(info.group, expected_group, "monitor {} should still list both zone members", info.name);
+            assert_eq!(
+                info.group, expected_group,
+                "monitor {} should still list both zone members",
+                info.name
+            );
         }
     }
 
@@ -378,10 +483,18 @@ mod tests {
             &mut render,
         );
 
-        handle_command(&mut state, Command::Unset { monitor: "eDP-1".to_string() }, &mut render);
+        handle_command(
+            &mut state,
+            Command::Unset {
+                monitor: "eDP-1".to_string(),
+            },
+            &mut render,
+        );
         let resp = handle_command(
             &mut state,
-            Command::Unset { monitor: "HDMI-A-1".to_string() },
+            Command::Unset {
+                monitor: "HDMI-A-1".to_string(),
+            },
             &mut render,
         );
         assert_eq!(resp, Response::Ok);
@@ -400,8 +513,20 @@ mod tests {
             &mut render,
         );
 
-        handle_command(&mut state, Command::Unset { monitor: "eDP-1".to_string() }, &mut render);
-        handle_command(&mut state, Command::Unset { monitor: "HDMI-A-1".to_string() }, &mut render);
+        handle_command(
+            &mut state,
+            Command::Unset {
+                monitor: "eDP-1".to_string(),
+            },
+            &mut render,
+        );
+        handle_command(
+            &mut state,
+            Command::Unset {
+                monitor: "HDMI-A-1".to_string(),
+            },
+            &mut render,
+        );
 
         handle_command(
             &mut state,
@@ -451,7 +576,10 @@ mod tests {
 
         handle_command(
             &mut state,
-            Command::Set { monitors: vec!["eDP-1".to_string()], path: "/a.mp4".to_string() },
+            Command::Set {
+                monitors: vec!["eDP-1".to_string()],
+                path: "/a.mp4".to_string(),
+            },
             &mut render,
         );
 
@@ -464,8 +592,13 @@ mod tests {
     fn pause_without_set_returns_error() {
         let mut state = state_with(&["eDP-1"]);
         let mut render = RenderResources::new_headless_for_test();
-        let resp =
-            handle_command(&mut state, Command::Pause { monitor: "eDP-1".to_string() }, &mut render);
+        let resp = handle_command(
+            &mut state,
+            Command::Pause {
+                monitor: "eDP-1".to_string(),
+            },
+            &mut render,
+        );
         assert_eq!(resp, Response::Error("no wallpaper set for eDP-1".to_string()));
     }
 
@@ -494,11 +627,19 @@ mod tests {
         let mut render = RenderResources::new_headless_for_test();
         handle_command(
             &mut state,
-            Command::Set { monitors: vec!["eDP-1".to_string()], path: "/a.mp4".to_string() },
+            Command::Set {
+                monitors: vec!["eDP-1".to_string()],
+                path: "/a.mp4".to_string(),
+            },
             &mut render,
         );
-        let resp =
-            handle_command(&mut state, Command::Pause { monitor: "eDP-1".to_string() }, &mut render);
+        let resp = handle_command(
+            &mut state,
+            Command::Pause {
+                monitor: "eDP-1".to_string(),
+            },
+            &mut render,
+        );
         assert_eq!(resp, Response::Error("no active playback for eDP-1".to_string()));
     }
 
@@ -506,11 +647,17 @@ mod tests {
     fn set_wallpaper_settings_persists_to_config_file() {
         let mut state = state_with(&["eDP-1"]);
         let mut render = RenderResources::new_headless_for_test();
-        let settings = WallpaperSettings { zoom: 1.5, ..WallpaperSettings::default() };
+        let settings = WallpaperSettings {
+            zoom: 1.5,
+            ..WallpaperSettings::default()
+        };
 
         let resp = handle_command(
             &mut state,
-            Command::SetWallpaperSettings { path: "/a.jpg".to_string(), settings },
+            Command::SetWallpaperSettings {
+                path: "/a.jpg".to_string(),
+                settings,
+            },
             &mut render,
         );
         assert_eq!(resp, Response::Ok);
@@ -525,7 +672,10 @@ mod tests {
         let mut render = RenderResources::new_headless_for_test();
         handle_command(
             &mut state,
-            Command::Set { monitors: vec!["eDP-1".to_string()], path: "/a.mp4".to_string() },
+            Command::Set {
+                monitors: vec!["eDP-1".to_string()],
+                path: "/a.mp4".to_string(),
+            },
             &mut render,
         );
 
@@ -539,7 +689,11 @@ mod tests {
         );
 
         let loaded = store::load(&state.config_path).unwrap();
-        assert_eq!(loaded.zones.len(), 1, "the earlier Set's zone must survive a later SetWallpaperSettings");
+        assert_eq!(
+            loaded.zones.len(),
+            1,
+            "the earlier Set's zone must survive a later SetWallpaperSettings"
+        );
     }
 
     #[test]
@@ -551,10 +705,16 @@ mod tests {
         // received them -- that's the plan's manual-verification step.
         let mut state = state_with(&["eDP-1"]);
         let mut render = RenderResources::new_headless_for_test();
-        let settings = WallpaperSettings { brightness: 30.0, ..WallpaperSettings::default() };
+        let settings = WallpaperSettings {
+            brightness: 30.0,
+            ..WallpaperSettings::default()
+        };
         handle_command(
             &mut state,
-            Command::SetWallpaperSettings { path: "/a.jpg".to_string(), settings },
+            Command::SetWallpaperSettings {
+                path: "/a.jpg".to_string(),
+                settings,
+            },
             &mut render,
         );
 

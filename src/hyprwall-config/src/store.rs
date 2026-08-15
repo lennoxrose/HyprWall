@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use super::model::Config;
+use crate::model::Config;
 
 pub fn default_config_path() -> PathBuf {
     dirs::config_dir()
@@ -29,7 +29,7 @@ pub fn save(path: &Path, cfg: &Config) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::model::ZoneConfig;
+    use crate::model::ZoneConfig;
 
     #[test]
     fn load_missing_file_returns_default() {
@@ -51,7 +51,18 @@ mod tests {
                     path: "/b.mp4".to_string(),
                 },
             ],
+            library_paths: vec![],
         };
+        save(&path, &cfg).unwrap();
+        let loaded = load(&path).unwrap();
+        assert_eq!(loaded, cfg);
+    }
+
+    #[test]
+    fn library_paths_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let cfg = Config { zones: vec![], library_paths: vec!["/home/u/Videos/wallpapers".to_string()] };
         save(&path, &cfg).unwrap();
         let loaded = load(&path).unwrap();
         assert_eq!(loaded, cfg);

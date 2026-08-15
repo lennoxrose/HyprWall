@@ -1,8 +1,8 @@
-use hyprwall_ipc::{Command, Response};
+use hyprwall_ipc::{Command, MonitorInfo, Response};
 
 use crate::app::AppState;
-use crate::config::model::{Config, ZoneConfig};
-use crate::config::store;
+use hyprwall_config::model::{Config, ZoneConfig};
+use hyprwall_config::store;
 use crate::render::RenderResources;
 use crate::zone_manager::ZoneError;
 
@@ -16,7 +16,17 @@ use crate::zone_manager::ZoneError;
 /// still runs.
 pub fn handle_command(state: &mut AppState, cmd: Command, render: &mut RenderResources) -> Response {
     match cmd {
-        Command::MonitorList => Response::MonitorList(state.registry.names()),
+        Command::MonitorList => Response::MonitorList(
+            state
+                .registry
+                .names()
+                .into_iter()
+                .filter_map(|name| {
+                    let m = state.registry.get(&name)?;
+                    Some(MonitorInfo { name: m.name.clone(), x: m.logical.x, y: m.logical.y, w: m.logical.w, h: m.logical.h })
+                })
+                .collect(),
+        ),
         Command::Get { monitor } => match state.zones.path_for_monitor(&monitor) {
             Some(path) => Response::Path(path.to_string()),
             None => Response::Error(format!("no wallpaper set for {monitor}")),
@@ -86,7 +96,11 @@ fn persist(state: &AppState) {
             Some(ZoneConfig { monitors: zone.monitors.clone(), path: zone.path.clone()? })
         })
         .collect();
-    let _ = store::save(&state.config_path, &Config { zones });
+    // `library_paths` is hyprwall-gui's field, not hyprwalld's -- hyprwalld
+    // only ever writes zones, so it must carry the existing value through
+    // rather than defaulting it away on every zone save.
+    let library_paths = store::load(&state.config_path).unwrap_or_default().library_paths;
+    let _ = store::save(&state.config_path, &Config { zones, library_paths });
 }
 
 #[cfg(test)]
@@ -112,7 +126,13 @@ mod tests {
         let mut state = state_with(&["eDP-1", "HDMI-A-1"]);
         let mut render = RenderResources::new_headless_for_test();
         let resp = handle_command(&mut state, Command::MonitorList, &mut render);
-        assert_eq!(resp, Response::MonitorList(vec!["HDMI-A-1".to_string(), "eDP-1".to_string()]));
+        assert_eq!(
+            resp,
+            Response::MonitorList(vec![
+                MonitorInfo { name: "HDMI-A-1".to_string(), x: 1920, y: 0, w: 1920, h: 1080 },
+                MonitorInfo { name: "eDP-1".to_string(), x: 0, y: 0, w: 1920, h: 1080 },
+            ])
+        );
     }
 
     #[test]
@@ -167,6 +187,28 @@ mod tests {
         let loaded = store::load(&state.config_path).unwrap();
         assert_eq!(loaded.zones.len(), 1);
         assert_eq!(loaded.zones[0].path, "/pano.mp4");
+    }
+
+    #[test]
+    fn set_preserves_library_paths_written_by_the_gui() {
+        let mut state = state_with(&["eDP-1"]);
+        let mut render = RenderResources::new_headless_for_test();
+
+        // Simulate hyprwall-gui having already saved library folders before
+        // hyprwalld ever writes a zone.
+        let mut cfg = store::load(&state.config_path).unwrap();
+        cfg.library_paths = vec!["/home/u/Videos".to_string()];
+        store::save(&state.config_path, &cfg).unwrap();
+
+        handle_command(
+            &mut state,
+            Command::Set { monitors: vec!["eDP-1".to_string()], path: "/a.mp4".to_string() },
+            &mut render,
+        );
+
+        let loaded = store::load(&state.config_path).unwrap();
+        assert_eq!(loaded.library_paths, vec!["/home/u/Videos".to_string()]);
+        assert_eq!(loaded.zones.len(), 1, "the zone save itself should still have happened");
     }
 
     #[test]

@@ -1,8 +1,16 @@
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use hyprwall_ipc::Command;
+use crate::Command;
+
+/// Resolves the daemon's control socket path: `$XDG_RUNTIME_DIR/hyprwall.sock`.
+/// Shared by `hyprwalld` (binds it), `hyprwallctl`, and `hyprwall-gui`
+/// (both connect to it) so the path is defined in exactly one place.
+pub fn default_socket_path() -> PathBuf {
+    let runtime_dir = std::env::var("XDG_RUNTIME_DIR").expect("XDG_RUNTIME_DIR is not set");
+    PathBuf::from(runtime_dir).join("hyprwall.sock")
+}
 
 pub fn send(socket_path: &Path, cmd: &Command) -> std::io::Result<String> {
     let mut stream = UnixStream::connect(socket_path)?;

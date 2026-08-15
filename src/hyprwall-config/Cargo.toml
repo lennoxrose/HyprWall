@@ -1,0 +1,13 @@
+[package]
+name = "hyprwall-config"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.104"
+dirs = "6.0.0"
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.1.4"
+
+[dev-dependencies]
+tempfile = "3.27.0"

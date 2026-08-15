@@ -1,8 +1,17 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MonitorInfo {
+    pub name: String,
+    pub x: i32,
+    pub y: i32,
+    pub w: i32,
+    pub h: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Response {
     Ok,
     Path(String),
-    MonitorList(Vec<String>),
+    MonitorList(Vec<MonitorInfo>),
     Error(String),
 }
 
@@ -11,16 +20,21 @@ impl Response {
         match self {
             Response::Ok => "ok".to_string(),
             Response::Path(p) => p.clone(),
-            Response::MonitorList(names) => names.join("\n"),
+            Response::MonitorList(infos) => infos
+                .iter()
+                .map(|m| format!("{} {},{},{},{}", m.name, m.x, m.y, m.w, m.h))
+                .collect::<Vec<_>>()
+                .join("\n"),
             Response::Error(msg) => format!("error: {msg}"),
         }
     }
 }
 
-/// Best-effort parse of a response body back into a `Response`. `Path` and
-/// `MonitorList` are wire-ambiguous (both are plain text), so this is only
-/// used where the caller already knows which command it sent; ambiguous
-/// cases are treated as a single-element list falling back to `Path`.
+/// Parses a response body back into a `Response`. `Path` and single-monitor
+/// `MonitorList` replies are both plain text, but a `MonitorInfo` line has a
+/// recognizable `name x,y,w,h` shape a filesystem path never does, so this
+/// disambiguates directly rather than needing the caller to already know
+/// which command it sent.
 pub fn parse_response(text: &str) -> Response {
     if let Some(msg) = text.strip_prefix("error: ") {
         return Response::Error(msg.to_string());
@@ -29,9 +43,25 @@ pub fn parse_response(text: &str) -> Response {
         return Response::Ok;
     }
     if text.contains('\n') {
-        return Response::MonitorList(text.lines().map(str::to_string).collect());
+        return Response::MonitorList(text.lines().filter_map(parse_monitor_info_line).collect());
+    }
+    if let Some(info) = parse_monitor_info_line(text) {
+        return Response::MonitorList(vec![info]);
     }
     Response::Path(text.to_string())
+}
+
+fn parse_monitor_info_line(line: &str) -> Option<MonitorInfo> {
+    let (name, rect) = line.rsplit_once(' ')?;
+    let mut parts = rect.split(',');
+    let x = parts.next()?.parse().ok()?;
+    let y = parts.next()?.parse().ok()?;
+    let w = parts.next()?.parse().ok()?;
+    let h = parts.next()?.parse().ok()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    Some(MonitorInfo { name: name.to_string(), x, y, w, h })
 }
 
 #[cfg(test)]
@@ -57,7 +87,16 @@ mod tests {
 
     #[test]
     fn monitor_list_round_trips() {
-        let r = Response::MonitorList(vec!["eDP-1".to_string(), "HDMI-A-1".to_string()]);
+        let r = Response::MonitorList(vec![
+            MonitorInfo { name: "eDP-1".to_string(), x: 0, y: 0, w: 1920, h: 1080 },
+            MonitorInfo { name: "HDMI-A-1".to_string(), x: 1920, y: 0, w: 1920, h: 1080 },
+        ]);
         assert_eq!(parse_response(&r.to_wire()), r);
+    }
+
+    #[test]
+    fn monitor_info_wire_format_is_name_space_x_comma_y_comma_w_comma_h() {
+        let r = Response::MonitorList(vec![MonitorInfo { name: "eDP-1".to_string(), x: 0, y: 0, w: 1920, h: 1080 }]);
+        assert_eq!(r.to_wire(), "eDP-1 0,0,1920,1080");
     }
 }

@@ -1,5 +1,4 @@
 mod app;
-mod config;
 mod ipc;
 mod monitor;
 mod monitor_registry;
@@ -37,8 +36,17 @@ struct Daemon {
 }
 
 fn main() -> anyhow::Result<()> {
+    // libmpv refuses to initialize outside the "C" locale for LC_NUMERIC
+    // (it parses numbers like frame timestamps with the C library's
+    // locale-sensitive functions internally); the desktop's LANG/LC_*
+    // being e.g. en_US.UTF-8 is enough to trip this, so every MpvInstance
+    // this process ever creates depends on setting it back here first.
+    // Only LC_NUMERIC is touched -- everything else (message locale,
+    // collation, etc.) is left as the user configured it.
+    unsafe { libc::setlocale(libc::LC_NUMERIC, c"C".as_ptr()) };
+
     let (backend, app_data) = WaylandBackend::new()?;
-    let config_path = config::store::default_config_path();
+    let config_path = hyprwall_config::store::default_config_path();
     // One informative diagnostic if the file exists but fails to parse; the
     // `Config` value itself is discarded here -- `restore_saved_zones` below
     // re-reads the file fresh on every relevant Wayland event instead of
@@ -46,7 +54,7 @@ fn main() -> anyhow::Result<()> {
     // isn't enough), so this call exists only for the startup message. A
     // missing file already returns `Config::default()` from `load` itself
     // (not an error), so this only fires for a genuinely corrupt file.
-    if let Err(e) = config::store::load(&config_path) {
+    if let Err(e) = hyprwall_config::store::load(&config_path) {
         eprintln!("hyprwalld: failed to load {}: {e} (starting with no saved zones)", config_path.display());
     }
 
@@ -91,7 +99,7 @@ fn main() -> anyhow::Result<()> {
         })
         .map_err(|e| anyhow::anyhow!("failed to insert wayland source into event loop: {}", e.error))?;
 
-    let socket_path = ipc::socket::socket_path();
+    let socket_path = hyprwall_ipc::default_socket_path();
     let listener = ipc::socket::bind_listener(&socket_path)?;
     listener.set_nonblocking(true)?;
     println!("hyprwalld listening on {}", socket_path.display());
@@ -182,7 +190,7 @@ fn handle_connection(conn: &mut UnixStream, daemon: &mut Daemon) {
 /// (others still waiting on a monitor), persisting now would rebuild the
 /// file from `ZoneManager`'s current partial state and drop the rest.
 fn restore_saved_zones(daemon: &mut Daemon) {
-    let saved = config::store::load(&daemon.state.config_path).unwrap_or_default();
+    let saved = hyprwall_config::store::load(&daemon.state.config_path).unwrap_or_default();
     if saved.zones.is_empty() {
         return;
     }

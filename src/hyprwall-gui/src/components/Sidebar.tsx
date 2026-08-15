@@ -118,7 +118,7 @@ export function Sidebar({ path, kind, onClose }: Props) {
           borderTopLeftRadius: PANEL_RADIUS,
           borderBottomLeftRadius: PANEL_RADIUS,
           boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-          padding: 14,
+          padding: "22px 14px",
           display: "flex",
           flexDirection: "column",
           gap: 14,

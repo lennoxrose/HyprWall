@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 pub struct Config {
     #[serde(default)]
     pub zones: Vec<ZoneConfig>,
+    #[serde(default)]
+    pub library_paths: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -51,7 +51,18 @@ mod tests {
                     path: "/b.mp4".to_string(),
                 },
             ],
+            library_paths: vec![],
         };
+        save(&path, &cfg).unwrap();
+        let loaded = load(&path).unwrap();
+        assert_eq!(loaded, cfg);
+    }
+
+    #[test]
+    fn library_paths_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let cfg = Config { zones: vec![], library_paths: vec!["/home/u/Videos/wallpapers".to_string()] };
         save(&path, &cfg).unwrap();
         let loaded = load(&path).unwrap();
         assert_eq!(loaded, cfg);

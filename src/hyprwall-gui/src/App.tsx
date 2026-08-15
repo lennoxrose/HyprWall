@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { TitleBar } from "./components/TitleBar";
-import { MonitorLayout } from "./components/MonitorLayout";
+import { MonitorsDropdown } from "./components/MonitorsDropdown";
 import { LibraryGrid } from "./components/LibraryGrid";
 import { AssignButton } from "./components/AssignButton";
 import { StatusBanner } from "./components/StatusBanner";
@@ -24,6 +24,7 @@ export default function App() {
   const [newFolder, setNewFolder] = useState("");
   const [daemonDown, setDaemonDown] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [monitorsOpen, setMonitorsOpen] = useState(false);
   const { selectedMonitors, toggleMonitor, selectedWallpaper, setSelectedWallpaper } = useSelection();
 
   const refresh = useCallback(async () => {
@@ -95,6 +96,7 @@ export default function App() {
   return (
     <div
       style={{
+        position: "relative",
         display: "flex",
         flexDirection: "column",
         height: "100vh",
@@ -103,7 +105,17 @@ export default function App() {
         background: "#0a0a0a",
       }}
     >
-      <TitleBar />
+      <TitleBar monitorsOpen={monitorsOpen} onToggleMonitors={() => setMonitorsOpen((o) => !o)} />
+      {monitorsOpen && (
+        <MonitorsDropdown
+          monitors={monitors}
+          selected={selectedMonitors}
+          onToggle={toggleMonitor}
+          onClose={() => setMonitorsOpen(false)}
+          onPause={pause}
+          onPlay={play}
+        />
+      )}
       {daemonDown && <StatusBanner />}
       <fieldset
         disabled={daemonDown}
@@ -114,21 +126,6 @@ export default function App() {
             {actionError}
           </p>
         )}
-
-        <section>
-          <h2>Monitors</h2>
-          <MonitorLayout monitors={monitors} selected={selectedMonitors} onToggle={toggleMonitor} />
-          {Array.from(selectedMonitors).map((name) => {
-            const m = monitors.find((mon) => mon.name === name);
-            if (!m?.current_path) return null;
-            return (
-              <div key={name}>
-                {name}: <button onClick={() => pause(name)}>Pause</button>
-                <button onClick={() => play(name)}>Play</button>
-              </div>
-            );
-          })}
-        </section>
 
         <section>
           <h2>Library folders</h2>

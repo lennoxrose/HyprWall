@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = ["src/hyprwall-config", "src/hyprwall-gui/src-tauri", "src/hyprwall-ipc", "src/hyprwallctl", "src/hyprwalld"]
+
+# The single source of truth for the app's version -- every crate below
+# references this via `version.workspace = true` instead of a literal, and
+# `tauri.conf.json` omits its own `version` key so Tauri reads this same
+# value at build time. `src/hyprwall-gui/package.json`'s version is checked
+# against this one in CI (see .github/workflows/ci.yml's version-consistency
+# job) rather than generated from it, since npm has no workspace-version
+# inheritance of its own.
+[workspace.package]
+version = "0.1.0"

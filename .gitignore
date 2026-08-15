@@ -1,0 +1,8 @@
+/target
+.claude/
+.superpowers/
+/CLAUDE.md
+docs/
+src/hyprwall-gui/src-tauri/gen/
+src/hyprwall-gui/node_modules/
+src/hyprwall-gui/dist/

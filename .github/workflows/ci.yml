@@ -41,9 +41,16 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
 
   # Known RustSec advisories in the dependency tree fail the build outright
-  # -- "it compiles" isn't the same as "it's safe to ship."
+  # -- "it compiles" isn't the same as "it's safe to ship." `checks: write`
+  # is load-bearing, not decoration: the action posts its findings as a
+  # check-run annotation, which the default GITHUB_TOKEN can't do without
+  # it -- confirmed the hard way (a real "Resource not accessible by
+  # integration" failure on dev after this workflow's first merge).
   audit:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v4
       - uses: rustsec/audit-check@v2

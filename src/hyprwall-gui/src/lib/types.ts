@@ -15,3 +15,17 @@ export interface WallpaperEntry {
   thumbnail_path: string | null;
   kind: WallpaperKind;
 }
+
+export type FitMode = "cover" | "contain" | "stretch";
+
+export interface WallpaperSettings {
+  zoom: number;
+  pan_x: number;
+  pan_y: number;
+  fit: FitMode;
+  volume: number;
+  brightness: number;
+  contrast: number;
+  hue: number;
+  saturation: number;
+}

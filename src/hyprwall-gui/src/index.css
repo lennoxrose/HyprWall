@@ -45,3 +45,15 @@ body {
 .monitor-tile-hover-orange:hover {
   border-color: #f97316 !important;
 }
+
+/* Hides the native increment/decrement spinner on a type="number" input --
+   only these fields opt in via this class, so the browser default stays
+   untouched everywhere else. */
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.no-spinner {
+  -moz-appearance: textfield;
+}

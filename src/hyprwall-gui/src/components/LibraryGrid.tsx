@@ -78,9 +78,10 @@ interface Props {
   wallpapers: WallpaperEntry[];
   selected: string | null;
   onSelect: (path: string) => void;
+  onOpenSettings: (path: string) => void;
 }
 
-export function LibraryGrid({ wallpapers, selected, onSelect }: Props) {
+export function LibraryGrid({ wallpapers, selected, onSelect, onOpenSettings }: Props) {
   const [hovered, setHovered] = useState<string | null>(null);
 
   if (wallpapers.length === 0) {
@@ -98,6 +99,10 @@ export function LibraryGrid({ wallpapers, selected, onSelect }: Props) {
             onClick={() => onSelect(w.path)}
             onMouseEnter={() => setHovered(w.path)}
             onMouseLeave={() => setHovered((h) => (h === w.path ? null : h))}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              if (w.path === selected) onOpenSettings(w.path);
+            }}
             title={w.path.split("/").pop()}
             style={{
               position: "relative",

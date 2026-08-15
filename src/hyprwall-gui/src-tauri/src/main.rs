@@ -18,6 +18,8 @@ fn main() {
             commands::monitors::unset_wallpaper,
             commands::monitors::pause_wallpaper,
             commands::monitors::play_wallpaper,
+            commands::service::get_background_service_enabled,
+            commands::service::set_background_service_enabled,
             commands::snapshot::capture_monitor_snapshot,
         ])
         .run(tauri::generate_context!())

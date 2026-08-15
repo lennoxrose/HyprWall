@@ -7,10 +7,12 @@ fn main() {
     unsafe { libc::setlocale(libc::LC_NUMERIC, c"C".as_ptr()) };
 
     tauri::Builder::default()
+        .manage(commands::library_watch::WatcherState::default())
         .invoke_handler(tauri::generate_handler![
             commands::config::get_library_folders,
             commands::config::set_library_folders,
             commands::library::scan_library,
+            commands::library_watch::watch_library_folders,
             commands::monitors::list_monitors,
             commands::monitors::set_wallpaper,
             commands::monitors::unset_wallpaper,

@@ -32,5 +32,7 @@ export const setLibraryFolders = (folders: string[]) => call<void>("set_library_
 
 export const scanLibrary = (folders: string[]) => call<WallpaperEntry[]>("scan_library", { folders });
 
+export const watchLibraryFolders = (folders: string[]) => call<void>("watch_library_folders", { folders });
+
 export const captureMonitorSnapshot = (monitorName: string) =>
   call<string>("capture_monitor_snapshot", { monitorName });

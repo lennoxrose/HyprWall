@@ -9,6 +9,7 @@ pub struct MonitorState {
     pub w: i32,
     pub h: i32,
     pub current_path: Option<String>,
+    pub group: Vec<String>,
 }
 
 #[tauri::command]
@@ -23,13 +24,13 @@ fn list_monitors_at(socket_path: &std::path::Path) -> Result<Vec<MonitorState>, 
     };
 
     let mut states = Vec::with_capacity(infos.len());
-    for MonitorInfo { name, x, y, w, h } in infos {
+    for MonitorInfo { name, x, y, w, h, group } in infos {
         let current_path = match send_and_parse(socket_path, Command::Get { monitor: name.clone() })? {
             Response::Path(p) => Some(p),
             Response::Error(_) => None,
             other => return Err(format!("unexpected response to get: {other:?}")),
         };
-        states.push(MonitorState { name, x, y, w, h, current_path });
+        states.push(MonitorState { name, x, y, w, h, current_path, group });
     }
     Ok(states)
 }
@@ -81,7 +82,7 @@ mod tests {
 
         let listener = UnixListener::bind(&socket_path).unwrap();
         let server = thread::spawn(move || {
-            for reply in ["eDP-1 0,0,1920,1080", "/a.mp4"] {
+            for reply in ["eDP-1 0,0,1920,1080 eDP-1", "/a.mp4"] {
                 let (mut conn, _) = listener.accept().unwrap();
                 let mut received = String::new();
                 conn.read_to_string(&mut received).unwrap();
@@ -101,6 +102,7 @@ mod tests {
                 w: 1920,
                 h: 1080,
                 current_path: Some("/a.mp4".to_string()),
+                group: vec!["eDP-1".to_string()],
             }]
         );
     }
@@ -111,7 +113,7 @@ mod tests {
         let socket_path = dir.path().join("hyprwall.sock");
         let listener = UnixListener::bind(&socket_path).unwrap();
         let server = thread::spawn(move || {
-            for reply in ["eDP-1 0,0,1920,1080", "error: no wallpaper set for eDP-1"] {
+            for reply in ["eDP-1 0,0,1920,1080 -", "error: no wallpaper set for eDP-1"] {
                 let (mut conn, _) = listener.accept().unwrap();
                 let mut received = String::new();
                 conn.read_to_string(&mut received).unwrap();
@@ -122,6 +124,7 @@ mod tests {
         let states = list_monitors_at(&socket_path).unwrap();
         server.join().unwrap();
         assert_eq!(states[0].current_path, None);
+        assert_eq!(states[0].group, Vec::<String>::new());
     }
 
     #[test]

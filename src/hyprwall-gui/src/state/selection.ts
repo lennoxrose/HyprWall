@@ -13,5 +13,7 @@ export function useSelection() {
     });
   };
 
-  return { selectedMonitors, toggleMonitor, selectedWallpaper, setSelectedWallpaper };
+  const clearSelectedMonitors = () => setSelectedMonitors(new Set());
+
+  return { selectedMonitors, toggleMonitor, clearSelectedMonitors, selectedWallpaper, setSelectedWallpaper };
 }

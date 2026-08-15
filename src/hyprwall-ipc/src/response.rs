@@ -5,6 +5,11 @@ pub struct MonitorInfo {
     pub y: i32,
     pub w: i32,
     pub h: i32,
+    /// Sorted names of every monitor sharing this monitor's zone, including
+    /// itself. Empty if this monitor has no wallpaper assigned at all. A
+    /// single-element list (just itself) means a solo zone -- distinct from
+    /// a real multi-monitor group, which has `group.len() > 1`.
+    pub group: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,7 +27,10 @@ impl Response {
             Response::Path(p) => p.clone(),
             Response::MonitorList(infos) => infos
                 .iter()
-                .map(|m| format!("{} {},{},{},{}", m.name, m.x, m.y, m.w, m.h))
+                .map(|m| {
+                    let group = if m.group.is_empty() { "-".to_string() } else { m.group.join(",") };
+                    format!("{} {},{},{},{} {}", m.name, m.x, m.y, m.w, m.h, group)
+                })
                 .collect::<Vec<_>>()
                 .join("\n"),
             Response::Error(msg) => format!("error: {msg}"),
@@ -52,7 +60,11 @@ pub fn parse_response(text: &str) -> Response {
 }
 
 fn parse_monitor_info_line(line: &str) -> Option<MonitorInfo> {
-    let (name, rect) = line.rsplit_once(' ')?;
+    let mut fields = line.splitn(3, ' ');
+    let name = fields.next()?;
+    let rect = fields.next()?;
+    let group = fields.next()?;
+
     let mut parts = rect.split(',');
     let x = parts.next()?.parse().ok()?;
     let y = parts.next()?.parse().ok()?;
@@ -61,7 +73,10 @@ fn parse_monitor_info_line(line: &str) -> Option<MonitorInfo> {
     if parts.next().is_some() {
         return None;
     }
-    Some(MonitorInfo { name: name.to_string(), x, y, w, h })
+
+    let group = if group == "-" { Vec::new() } else { group.split(',').map(str::to_string).collect() };
+
+    Some(MonitorInfo { name: name.to_string(), x, y, w, h, group })
 }
 
 #[cfg(test)]
@@ -88,15 +103,36 @@ mod tests {
     #[test]
     fn monitor_list_round_trips() {
         let r = Response::MonitorList(vec![
-            MonitorInfo { name: "eDP-1".to_string(), x: 0, y: 0, w: 1920, h: 1080 },
-            MonitorInfo { name: "HDMI-A-1".to_string(), x: 1920, y: 0, w: 1920, h: 1080 },
+            MonitorInfo { name: "eDP-1".to_string(), x: 0, y: 0, w: 1920, h: 1080, group: vec!["eDP-1".to_string(), "HDMI-A-1".to_string()] },
+            MonitorInfo { name: "HDMI-A-1".to_string(), x: 1920, y: 0, w: 1920, h: 1080, group: vec!["eDP-1".to_string(), "HDMI-A-1".to_string()] },
         ]);
         assert_eq!(parse_response(&r.to_wire()), r);
     }
 
     #[test]
-    fn monitor_info_wire_format_is_name_space_x_comma_y_comma_w_comma_h() {
-        let r = Response::MonitorList(vec![MonitorInfo { name: "eDP-1".to_string(), x: 0, y: 0, w: 1920, h: 1080 }]);
-        assert_eq!(r.to_wire(), "eDP-1 0,0,1920,1080");
+    fn monitor_info_wire_format_is_name_space_rect_space_group() {
+        let r = Response::MonitorList(vec![MonitorInfo {
+            name: "eDP-1".to_string(),
+            x: 0,
+            y: 0,
+            w: 1920,
+            h: 1080,
+            group: vec!["eDP-1".to_string()],
+        }]);
+        assert_eq!(r.to_wire(), "eDP-1 0,0,1920,1080 eDP-1");
+    }
+
+    #[test]
+    fn monitor_info_with_empty_group_round_trips_via_placeholder() {
+        let r = Response::MonitorList(vec![MonitorInfo {
+            name: "eDP-1".to_string(),
+            x: 0,
+            y: 0,
+            w: 1920,
+            h: 1080,
+            group: vec![],
+        }]);
+        assert_eq!(r.to_wire(), "eDP-1 0,0,1920,1080 -");
+        assert_eq!(parse_response(&r.to_wire()), r);
     }
 }

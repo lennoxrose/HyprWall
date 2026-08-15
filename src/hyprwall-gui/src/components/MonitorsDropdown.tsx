@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { DROPDOWN_ANIM_MS, DROPDOWN_EASING, TITLEBAR_BLUE, TITLEBAR_HEIGHT } from "./TitleBar";
 import { MonitorLayout } from "./MonitorLayout";
 import type { MonitorState } from "../lib/types";
@@ -8,9 +9,23 @@ interface Props {
   selected: Set<string>;
   onToggle: (name: string) => void;
   onClose: () => void;
-  onPause: (monitor: string) => void;
-  onPlay: (monitor: string) => void;
+  groupMode: boolean;
+  onToggleGroupMode: () => void;
+  onConfirmGroupSelection: () => void;
+  onCancelGroupMode: () => void;
+  onUngroup: (names: string[], path: string) => void;
+  onRemoveWallpaper: (names: string[]) => void;
 }
+
+const TOOLBAR_BUTTON_STYLE: CSSProperties = {
+  border: "none",
+  borderRadius: 6,
+  background: "#4b5563",
+  color: "#fff",
+  fontSize: 12,
+  padding: "6px 10px",
+  cursor: "pointer",
+};
 
 const PAGE_BG = "#0a0a0a";
 const NOTCH = 14;
@@ -48,12 +63,44 @@ function CornerNotch({ side }: { side: "left" | "right" }) {
  * its content is, without ever measuring pixels. Opening it is just
  * `translateY(0)` -- the panel literally slides down from behind the
  * navbar into view, rather than a clip/height trick faking the same look. */
-export function MonitorsDropdown({ open, monitors, selected, onToggle, onClose, onPause, onPlay }: Props) {
+export function MonitorsDropdown({
+  open,
+  monitors,
+  selected,
+  onToggle,
+  onClose,
+  groupMode,
+  onToggleGroupMode,
+  onConfirmGroupSelection,
+  onCancelGroupMode,
+  onUngroup,
+  onRemoveWallpaper,
+}: Props) {
+  // A monitor in a real (>1-member) zone -- distinct from a solo zone,
+  // whose `group` is just `[itself]`.
+  const groupOf = (name: string) => {
+    const m = monitors.find((mon) => mon.name === name);
+    return m && m.group.length > 1 ? m.group : null;
+  };
+
+  const canUngroup = Array.from(selected).some((name) => groupOf(name) !== null);
+  const canRemoveWallpaper = selected.size > 0;
+
+  const handleUngroup = () => {
+    const seen = new Set<string>();
+    for (const name of selected) {
+      const group = groupOf(name);
+      if (!group || seen.has(group.join(","))) continue;
+      seen.add(group.join(","));
+      const path = monitors.find((m) => m.name === group[0])?.current_path;
+      if (path) onUngroup(group, path);
+    }
+  };
+
+  const handleRemoveWallpaper = () => onRemoveWallpaper(Array.from(selected));
+
   return (
     <>
-      {open && (
-        <div onClick={onClose} style={{ position: "fixed", inset: 0, top: TITLEBAR_HEIGHT, zIndex: 10 }} />
-      )}
       <div
         style={{
           position: "absolute",
@@ -85,17 +132,60 @@ export function MonitorsDropdown({ open, monitors, selected, onToggle, onClose, 
             padding: 14,
           }}
         >
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              {groupMode && selected.size >= 2 ? (
+                <div
+                  style={{
+                    ...TOOLBAR_BUTTON_STYLE,
+                    flex: 1,
+                    display: "flex",
+                    padding: 0,
+                    overflow: "hidden",
+                  }}
+                >
+                  <button
+                    onClick={onConfirmGroupSelection}
+                    style={{ flex: 1, border: "none", background: "transparent", color: "#fff", fontSize: 12, padding: "6px 10px", cursor: "pointer" }}
+                  >
+                    Confirm
+                  </button>
+                  <div style={{ width: 1, background: "rgba(255,255,255,0.3)" }} />
+                  <button
+                    onClick={onCancelGroupMode}
+                    style={{ flex: 1, border: "none", background: "transparent", color: "#fff", fontSize: 12, padding: "6px 10px", cursor: "pointer" }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={onToggleGroupMode}
+                  style={{
+                    ...TOOLBAR_BUTTON_STYLE,
+                    flex: 1,
+                    background: groupMode ? "#9ca3af" : TOOLBAR_BUTTON_STYLE.background,
+                  }}
+                >
+                  Group
+                </button>
+              )}
+              <button onClick={handleUngroup} disabled={!canUngroup} style={{ ...TOOLBAR_BUTTON_STYLE, flex: 1 }}>
+                Ungroup
+              </button>
+            </div>
+            <button onClick={handleRemoveWallpaper} disabled={!canRemoveWallpaper} style={{ ...TOOLBAR_BUTTON_STYLE, width: "100%" }}>
+              Remove Wallpaper
+            </button>
+            {groupMode && (
+              <span style={{ color: "rgba(255,255,255,0.75)", fontSize: 12, textAlign: "center" }}>
+                {selected.size >= 2
+                  ? `${selected.size} selected -- confirm to pick a wallpaper, or cancel`
+                  : `select 2+ monitors, then pick a wallpaper (${selected.size} selected)`}
+              </span>
+            )}
+          </div>
           <MonitorLayout monitors={monitors} selected={selected} onToggle={onToggle} open={open} />
-          {Array.from(selected).map((name) => {
-            const m = monitors.find((mon) => mon.name === name);
-            if (!m?.current_path) return null;
-            return (
-              <div key={name} style={{ marginTop: 8, color: "#fff", fontSize: 13 }}>
-                {name}: <button onClick={() => onPause(name)}>Pause</button>{" "}
-                <button onClick={() => onPlay(name)}>Play</button>
-              </div>
-            );
-          })}
         </div>
       </div>
     </>

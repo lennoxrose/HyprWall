@@ -4,6 +4,7 @@ import { TitleBar } from "./components/TitleBar";
 import { MonitorsDropdown } from "./components/MonitorsDropdown";
 import { SettingsModal } from "./components/SettingsModal";
 import { LibraryGrid } from "./components/LibraryGrid";
+import { Sidebar } from "./components/Sidebar";
 import { EmptyLibraryState } from "./components/EmptyLibraryState";
 import { ErrorState } from "./components/ErrorState";
 import { useSelection } from "./state/selection";
@@ -29,6 +30,7 @@ export default function App() {
   const [monitorsOpen, setMonitorsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [groupMode, setGroupMode] = useState(false);
+  const [settingsSidebarPath, setSettingsSidebarPath] = useState<string | null>(null);
   const { selectedMonitors, toggleMonitor, clearSelectedMonitors, selectedWallpaper, setSelectedWallpaper } =
     useSelection();
 
@@ -208,6 +210,11 @@ export default function App() {
         onUngroup={ungroup}
         onRemoveWallpaper={removeWallpaper}
       />
+      <Sidebar
+        path={settingsSidebarPath}
+        kind={wallpapers.find((w) => w.path === settingsSidebarPath)?.kind ?? null}
+        onClose={() => setSettingsSidebarPath(null)}
+      />
       <fieldset
         disabled={daemonDown}
         style={{ border: "none", padding: 16, margin: 0, flex: 1, overflow: "auto" }}
@@ -225,7 +232,12 @@ export default function App() {
             {folders.length === 0 ? (
               <EmptyLibraryState />
             ) : (
-              <LibraryGrid wallpapers={wallpapers} selected={selectedWallpaper} onSelect={selectWallpaper} />
+              <LibraryGrid
+                wallpapers={wallpapers}
+                selected={selectedWallpaper}
+                onSelect={selectWallpaper}
+                onOpenSettings={setSettingsSidebarPath}
+              />
             )}
           </>
         )}

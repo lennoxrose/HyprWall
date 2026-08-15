@@ -60,9 +60,13 @@ function KindBadge({ kind }: { kind: WallpaperKind }) {
         width: 20,
         height: 20,
         borderRadius: 5,
-        background: "rgba(0,0,0,0.6)",
-        backdropFilter: "blur(4px)",
-        WebkitBackdropFilter: "blur(4px)",
+        // No backdrop-filter blur here (unlike SettingsModal's one big
+        // overlay blur): with ~300 of these badges painting at once during
+        // a bulk grid re-render, WebKitGTK's blur compositing glitched,
+        // rendering some badges as a stray solid/smeared color block
+        // instead of the icon. A plain opaque background has none of that
+        // risk.
+        background: "#0a0a0a",
       }}
     >
       {kind === "video" ? <VideoKindIcon /> : <ImageKindIcon />}
@@ -84,7 +88,7 @@ export function LibraryGrid({ wallpapers, selected, onSelect }: Props) {
   }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, 140px)", gap: 10 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 }}>
       {wallpapers.map((w) => {
         const isSelected = selected === w.path;
         const isHovered = hovered === w.path;

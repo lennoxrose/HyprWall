@@ -1,7 +1,7 @@
 use hyprwall_ipc::{Command, MonitorInfo, Response};
 
 use crate::app::AppState;
-use hyprwall_config::model::{Config, ZoneConfig};
+use hyprwall_config::model::{Config, WallpaperSettings, ZoneConfig};
 use hyprwall_config::store;
 use crate::render::RenderResources;
 use crate::zone_manager::{ClearOutcome as ZoneClearOutcome, ZoneError};
@@ -44,6 +44,13 @@ pub fn handle_command(state: &mut AppState, cmd: Command, render: &mut RenderRes
         Command::Unset { monitor } => handle_unset(state, render, &monitor),
         Command::Pause { monitor } => set_paused(state, render, &monitor, true),
         Command::Play { monitor } => set_paused(state, render, &monitor, false),
+        Command::SetWallpaperSettings { path, settings } => {
+            persist_wallpaper_settings(state, &path, settings);
+            for zone_id in state.zones.zone_ids_with_path(&path) {
+                render.apply_wallpaper_settings_to_zone(zone_id, &settings);
+            }
+            Response::Ok
+        }
     }
 }
 
@@ -99,6 +106,8 @@ pub fn apply_zone(
 ) -> Result<(), ZoneError> {
     let outcome = state.zones.apply_set(monitors, path.to_string(), &state.registry)?;
     render.apply_set_outcome(&outcome, monitors, path);
+    let settings = load_wallpaper_settings(&state.config_path, path);
+    render.apply_wallpaper_settings_to_zone(outcome.zone_id, &settings);
     Ok(())
 }
 
@@ -131,11 +140,29 @@ fn persist(state: &AppState) {
             Some(ZoneConfig { monitors: zone.monitors.clone(), path: zone.path.clone()? })
         })
         .collect();
-    // `library_paths` is hyprwall-gui's field, not hyprwalld's -- hyprwalld
-    // only ever writes zones, so it must carry the existing value through
-    // rather than defaulting it away on every zone save.
-    let library_paths = store::load(&state.config_path).unwrap_or_default().library_paths;
-    let _ = store::save(&state.config_path, &Config { zones, library_paths });
+    // `library_paths` and `wallpaper_settings` are written elsewhere
+    // (`library_paths` by hyprwall-gui, `wallpaper_settings` by
+    // `persist_wallpaper_settings` below) -- this function only ever
+    // rebuilds `zones`, so both must carry their existing values through
+    // rather than being defaulted away on every zone save.
+    let existing = store::load(&state.config_path).unwrap_or_default();
+    let _ = store::save(
+        &state.config_path,
+        &Config { zones, library_paths: existing.library_paths, wallpaper_settings: existing.wallpaper_settings },
+    );
+}
+
+fn load_wallpaper_settings(config_path: &std::path::Path, path: &str) -> WallpaperSettings {
+    store::load(config_path)
+        .ok()
+        .and_then(|cfg| cfg.wallpaper_settings.get(path).copied())
+        .unwrap_or_default()
+}
+
+fn persist_wallpaper_settings(state: &AppState, path: &str, settings: WallpaperSettings) {
+    let mut cfg = store::load(&state.config_path).unwrap_or_default();
+    cfg.wallpaper_settings.insert(path.to_string(), settings);
+    let _ = store::save(&state.config_path, &cfg);
 }
 
 #[cfg(test)]
@@ -143,6 +170,7 @@ mod tests {
     use super::*;
     use crate::monitor::{Monitor, Rect};
     use crate::monitor_registry::MonitorRegistry;
+    use hyprwall_config::model::WallpaperSettings;
 
     fn state_with(names: &[&str]) -> AppState {
         let mut registry = MonitorRegistry::new();
@@ -472,5 +500,66 @@ mod tests {
         let resp =
             handle_command(&mut state, Command::Pause { monitor: "eDP-1".to_string() }, &mut render);
         assert_eq!(resp, Response::Error("no active playback for eDP-1".to_string()));
+    }
+
+    #[test]
+    fn set_wallpaper_settings_persists_to_config_file() {
+        let mut state = state_with(&["eDP-1"]);
+        let mut render = RenderResources::new_headless_for_test();
+        let settings = WallpaperSettings { zoom: 1.5, ..WallpaperSettings::default() };
+
+        let resp = handle_command(
+            &mut state,
+            Command::SetWallpaperSettings { path: "/a.jpg".to_string(), settings },
+            &mut render,
+        );
+        assert_eq!(resp, Response::Ok);
+
+        let loaded = store::load(&state.config_path).unwrap();
+        assert_eq!(loaded.wallpaper_settings.get("/a.jpg"), Some(&settings));
+    }
+
+    #[test]
+    fn set_wallpaper_settings_preserves_zones_and_library_paths() {
+        let mut state = state_with(&["eDP-1"]);
+        let mut render = RenderResources::new_headless_for_test();
+        handle_command(
+            &mut state,
+            Command::Set { monitors: vec!["eDP-1".to_string()], path: "/a.mp4".to_string() },
+            &mut render,
+        );
+
+        handle_command(
+            &mut state,
+            Command::SetWallpaperSettings {
+                path: "/a.mp4".to_string(),
+                settings: WallpaperSettings::default(),
+            },
+            &mut render,
+        );
+
+        let loaded = store::load(&state.config_path).unwrap();
+        assert_eq!(loaded.zones.len(), 1, "the earlier Set's zone must survive a later SetWallpaperSettings");
+    }
+
+    #[test]
+    fn apply_zone_looks_up_saved_wallpaper_settings_without_erroring() {
+        // Headless RenderResources has no live mpv instance to inspect
+        // property values on (no GL/mpv in a test environment), so this
+        // proves the lookup-and-apply path in `apply_zone` runs cleanly
+        // for a path with a saved settings entry, not that mpv actually
+        // received them -- that's the plan's manual-verification step.
+        let mut state = state_with(&["eDP-1"]);
+        let mut render = RenderResources::new_headless_for_test();
+        let settings = WallpaperSettings { brightness: 30.0, ..WallpaperSettings::default() };
+        handle_command(
+            &mut state,
+            Command::SetWallpaperSettings { path: "/a.jpg".to_string(), settings },
+            &mut render,
+        );
+
+        apply_zone(&mut state, &mut render, &["eDP-1".to_string()], "/a.jpg").unwrap();
+
+        assert_eq!(state.zones.path_for_monitor("eDP-1"), Some("/a.jpg"));
     }
 }

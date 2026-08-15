@@ -46,6 +46,7 @@
 use std::ffi::c_void;
 use std::rc::Rc;
 
+use hyprwall_config::model::{FitMode, WallpaperSettings};
 use libmpv2::Mpv;
 use libmpv2::render::{
     OpenGLInitParams, RenderContext, RenderParam, RenderParamApiType, mpv_render_update,
@@ -73,12 +74,13 @@ impl MpvInstance {
             init.set_option("vo", "libmpv")?;
             // Wallpapers loop forever.
             init.set_option("loop-file", "inf")?;
-            // Spec: wallpapers are silent, with no per-wallpaper audio policy
-            // in v1. `mute` alone would still open an audio device (and could
-            // be undone by a stray property write), so the audio output is
-            // also forced to the null driver.
+            // Silent until `apply_wallpaper_settings` (below) decides
+            // otherwise -- never a frame where a freshly-loaded video could
+            // be audible before that first settings-apply call. Not paired
+            // with a hard `ao=null` (as this used to be, back when
+            // wallpapers had no audio policy at all): a real audio device is
+            // what makes per-wallpaper volume possible.
             init.set_option("mute", "yes")?;
-            init.set_option("ao", "null")?;
             // Without this, `mpv_render_context_render` blocks until the
             // frame's scheduled display time, which would stall every *other*
             // zone rendered from the same thread.
@@ -152,6 +154,35 @@ impl MpvInstance {
 
     pub fn set_paused(&self, paused: bool) -> anyhow::Result<()> {
         self.mpv.set_property("pause", paused)?;
+        Ok(())
+    }
+
+    /// Applies every per-picture display setting to this zone's mpv
+    /// instance in one call. `zoom` is converted from `WallpaperSettings`'
+    /// linear factor (1.0 = no zoom) into mpv's own log2 `video-zoom`
+    /// space here, at the boundary -- nowhere else needs to know mpv's
+    /// convention. `fit` maps onto mpv's `keepaspect`/`panscan` pair:
+    /// `Contain` keeps aspect and letterboxes (panscan 0), `Cover` keeps
+    /// aspect and crops to fill (panscan 1), `Stretch` drops aspect
+    /// entirely. `mute` is derived from `volume` rather than tracked
+    /// separately -- 0 volume and "muted" are the same state here.
+    pub fn apply_wallpaper_settings(&self, settings: &WallpaperSettings) -> anyhow::Result<()> {
+        self.mpv.set_property("video-zoom", settings.zoom.max(0.001).log2())?;
+        self.mpv.set_property("video-pan-x", settings.pan_x)?;
+        self.mpv.set_property("video-pan-y", settings.pan_y)?;
+        let (keepaspect, panscan) = match settings.fit {
+            FitMode::Contain => (true, 0.0),
+            FitMode::Cover => (true, 1.0),
+            FitMode::Stretch => (false, 0.0),
+        };
+        self.mpv.set_property("keepaspect", keepaspect)?;
+        self.mpv.set_property("panscan", panscan)?;
+        self.mpv.set_property("volume", settings.volume.clamp(0.0, 100.0))?;
+        self.mpv.set_property("mute", settings.volume <= 0.0)?;
+        self.mpv.set_property("brightness", settings.brightness.clamp(-100.0, 100.0))?;
+        self.mpv.set_property("contrast", settings.contrast.clamp(-100.0, 100.0))?;
+        self.mpv.set_property("hue", settings.hue.clamp(-100.0, 100.0))?;
+        self.mpv.set_property("saturation", settings.saturation.clamp(-100.0, 100.0))?;
         Ok(())
     }
 }

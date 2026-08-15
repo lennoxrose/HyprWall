@@ -52,6 +52,7 @@ mod tests {
                 },
             ],
             library_paths: vec![],
+            wallpaper_settings: Default::default(),
         };
         save(&path, &cfg).unwrap();
         let loaded = load(&path).unwrap();
@@ -62,7 +63,11 @@ mod tests {
     fn library_paths_round_trip() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.toml");
-        let cfg = Config { zones: vec![], library_paths: vec!["/home/u/Videos/wallpapers".to_string()] };
+        let cfg = Config {
+            zones: vec![],
+            library_paths: vec!["/home/u/Videos/wallpapers".to_string()],
+            wallpaper_settings: Default::default(),
+        };
         save(&path, &cfg).unwrap();
         let loaded = load(&path).unwrap();
         assert_eq!(loaded, cfg);

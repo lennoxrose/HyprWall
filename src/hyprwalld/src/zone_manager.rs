@@ -177,6 +177,13 @@ impl ZoneManager {
     pub fn path_for_monitor(&self, monitor: &str) -> Option<&str> {
         self.zone_for_monitor(monitor)?.path.as_deref()
     }
+
+    /// Every zone id currently assigned `path`, in no particular order.
+    /// Used by `Command::SetWallpaperSettings` to find which live
+    /// `MpvInstance`s a settings change should reach immediately.
+    pub fn zone_ids_with_path(&self, path: &str) -> Vec<u64> {
+        self.zones.iter().filter(|z| z.path.as_deref() == Some(path)).map(|z| z.id).collect()
+    }
 }
 
 #[cfg(test)]
@@ -193,6 +200,36 @@ mod tests {
             });
         }
         reg
+    }
+
+    #[test]
+    fn zone_ids_with_path_finds_a_single_match() {
+        let mut zm = ZoneManager::new();
+        let registry = registry_with(&["eDP-1"]);
+        zm.apply_set(&["eDP-1".to_string()], "/a.jpg".to_string(), &registry).unwrap();
+        let zone_id = zm.zone_for_monitor("eDP-1").unwrap().id;
+
+        assert_eq!(zm.zone_ids_with_path("/a.jpg"), vec![zone_id]);
+    }
+
+    #[test]
+    fn zone_ids_with_path_is_empty_when_nothing_matches() {
+        let mut zm = ZoneManager::new();
+        let registry = registry_with(&["eDP-1"]);
+        zm.apply_set(&["eDP-1".to_string()], "/a.jpg".to_string(), &registry).unwrap();
+
+        assert_eq!(zm.zone_ids_with_path("/other.jpg"), Vec::<u64>::new());
+    }
+
+    #[test]
+    fn zone_ids_with_path_only_returns_matching_zones() {
+        let mut zm = ZoneManager::new();
+        let registry = registry_with(&["eDP-1", "HDMI-A-1"]);
+        zm.apply_set(&["eDP-1".to_string()], "/a.jpg".to_string(), &registry).unwrap();
+        zm.apply_set(&["HDMI-A-1".to_string()], "/b.jpg".to_string(), &registry).unwrap();
+        let a_zone_id = zm.zone_for_monitor("eDP-1").unwrap().id;
+
+        assert_eq!(zm.zone_ids_with_path("/a.jpg"), vec![a_zone_id]);
     }
 
     #[test]

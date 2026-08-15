@@ -43,11 +43,48 @@ function Slider({
   step: number;
   onChange: (value: number) => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(() => String(value));
+
+  const commit = () => {
+    const parsed = Number(draft);
+    if (!Number.isNaN(parsed)) onChange(Math.min(max, Math.max(min, parsed)));
+    setEditing(false);
+  };
+
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "rgba(255,255,255,0.85)" }}>
-      <span style={{ display: "flex", justifyContent: "space-between" }}>
+      <span style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span>{label}</span>
-        <span style={{ opacity: 0.7 }}>{value.toFixed(2)}</span>
+        {editing ? (
+          <input
+            className="settings-input"
+            type="number"
+            autoFocus
+            value={draft}
+            min={min}
+            max={max}
+            step={step}
+            style={{ width: 64, padding: "2px 6px", fontSize: 11 }}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commit();
+              if (e.key === "Escape") setEditing(false);
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span
+            style={{ opacity: 0.7, cursor: "text" }}
+            onClick={() => {
+              setDraft(String(value));
+              setEditing(true);
+            }}
+          >
+            {value.toFixed(2)}
+          </span>
+        )}
       </span>
       <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
     </label>

@@ -15,6 +15,8 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -31,3 +33,107 @@ jobs:
           name: v${{ steps.version.outputs.version }}
           generate_release_notes: true
           target_commitish: master
+
+  # Built inside an Arch container, not ubuntu-latest -- these binaries get
+  # installed straight onto Arch systems via hyprwall-bin (no build step on
+  # the user's end), so they must link against the exact same glibc/GTK/
+  # WebKit/mpv .so versions Arch ships, not Ubuntu's.
+  build-linux-bin:
+    needs: release
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Install build dependencies
+        run: |
+          pacman -Syu --noconfirm --needed git rust nodejs npm \
+            mpv wayland mesa gtk3 webkit2gtk-4.1 libappindicator-gtk3 librsvg
+
+      - uses: actions/checkout@v4
+
+      - name: npm ci && npm run build
+        working-directory: src/hyprwall-gui
+        run: |
+          npm ci
+          npm run build
+
+      - name: cargo build --release
+        run: cargo build --release --workspace
+
+      - name: Package the release tarball
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          STAGE=$(mktemp -d)
+          cp target/release/hyprwalld target/release/hyprwallctl target/release/hyprwall-gui "$STAGE/"
+          cp packaging/hyprwall-gui.desktop "$STAGE/"
+          cp src/hyprwall-gui/src-tauri/icons/icon.png "$STAGE/hyprwall.png"
+          cp packaging/systemd/hyprwalld.socket packaging/systemd/hyprwalld.service "$STAGE/"
+          tar -czf "hyprwall-${VERSION}-x86_64.tar.gz" -C "$STAGE" .
+
+      - name: Attach the tarball to the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.release.outputs.version }}
+          files: hyprwall-*-x86_64.tar.gz
+
+  # Rewrites packaging/aur-bin/PKGBUILD's pkgver + sha256sums against the
+  # tarball build-linux-bin just attached to the Release, regenerates
+  # .SRCINFO, and pushes both to the AUR repo. Silently a no-op until the
+  # AUR_SSH_PRIVATE_KEY secret exists (see packaging/aur-bin/PKGBUILD's
+  # header) -- the git push step fails auth until then, which just means
+  # this job goes red without touching anything else in the pipeline.
+  publish-aur-bin:
+    needs: [release, build-linux-bin]
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    env:
+      VERSION: ${{ needs.release.outputs.version }}
+    steps:
+      - name: Install packaging dependencies
+        run: pacman -Syu --noconfirm --needed git openssh
+
+      - uses: actions/checkout@v4
+
+      - name: Download the release tarball and hash it
+        id: checksum
+        run: |
+          TARBALL="hyprwall-${VERSION}-x86_64.tar.gz"
+          curl -sL -o "$TARBALL" \
+            "https://github.com/lennoxrose/HyprWall/releases/download/v${VERSION}/${TARBALL}"
+          echo "sha=$(sha256sum "$TARBALL" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Update PKGBUILD
+        run: |
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" packaging/aur-bin/PKGBUILD
+          sed -i "s/^sha256sums=.*/sha256sums=('${{ steps.checksum.outputs.sha }}')/" packaging/aur-bin/PKGBUILD
+
+      - name: Generate .SRCINFO
+        run: |
+          useradd -m builder
+          chown -R builder:builder packaging/aur-bin
+          su builder -c "cd packaging/aur-bin && makepkg --printsrcinfo" > packaging/aur-bin/.SRCINFO
+
+      - name: Push to the AUR
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan -H aur.archlinux.org >> ~/.ssh/known_hosts 2>/dev/null
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/aur -o IdentitiesOnly=yes"
+          git config --global user.name "hyprwall-ci"
+          git config --global user.email "lennoxdethloff@gmail.com"
+
+          rm -rf /tmp/aur-hyprwall-bin
+          git clone ssh://aur@aur.archlinux.org/hyprwall-bin.git /tmp/aur-hyprwall-bin
+          cp packaging/aur-bin/PKGBUILD packaging/aur-bin/.SRCINFO /tmp/aur-hyprwall-bin/
+          cd /tmp/aur-hyprwall-bin
+
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "No AUR changes to push."
+            exit 0
+          fi
+          git commit -m "hyprwall-bin ${VERSION}"
+          git push

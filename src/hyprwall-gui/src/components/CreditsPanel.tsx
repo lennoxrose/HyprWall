@@ -51,21 +51,36 @@ const AVATAR_STYLE = {
   border: "1px solid #333",
 };
 
+/** Thin-stroke external-link glyph, matching the app's other custom SVG
+ * icons (cog, chevron, warning triangle) -- a box with an arrow escaping
+ * its top-right corner. */
+function ExternalLinkIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M15 3h6v6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 14 21 3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function ContributeLink() {
   return (
     <button
       onClick={() => open(REPO_URL).catch(() => {})}
       style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
         background: "transparent",
-        border: "1px solid #4ade80",
-        borderRadius: 6,
-        padding: "6px 14px",
-        fontSize: 12,
-        fontWeight: 600,
-        color: "#4ade80",
+        border: "none",
+        padding: 0,
+        fontSize: 11,
+        color: "#777",
         cursor: "pointer",
       }}
     >
+      <ExternalLinkIcon />
       I want to Contribute
     </button>
   );
@@ -165,41 +180,37 @@ export function CreditsPanel() {
         </div>
 
         {hasContributors ? (
-          <>
-            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 12 }}>
-              {otherContributors.map((c) => (
-                <div
-                  key={c.login}
-                  title={`${c.login} -- ${c.contributions ?? 0} commit${c.contributions === 1 ? "" : "s"}`}
-                  style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 64 }}
+          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 12 }}>
+            {otherContributors.map((c) => (
+              <div
+                key={c.login}
+                title={`${c.login} -- ${c.contributions ?? 0} commit${c.contributions === 1 ? "" : "s"}`}
+                style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 64 }}
+              >
+                <img src={c.avatar_url} alt={c.login} style={{ ...AVATAR_STYLE, width: 40, height: 40 }} />
+                <span
+                  style={{
+                    fontSize: 10,
+                    color: "#ccc",
+                    textAlign: "center",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    width: "100%",
+                  }}
                 >
-                  <img src={c.avatar_url} alt={c.login} style={{ ...AVATAR_STYLE, width: 40, height: 40 }} />
-                  <span
-                    style={{
-                      fontSize: 10,
-                      color: "#ccc",
-                      textAlign: "center",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      width: "100%",
-                    }}
-                  >
-                    {c.login}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "flex", justifyContent: "center", marginTop: 20 }}>
-              <ContributeLink />
-            </div>
-          </>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-            <p style={{ fontSize: 12, color: "#666", margin: 0 }}>Sadly no Contributors here yet</p>
-            <ContributeLink />
+                  {c.login}
+                </span>
+              </div>
+            ))}
           </div>
+        ) : (
+          <p style={{ fontSize: 12, color: "#666", margin: 0, textAlign: "center" }}>Sadly no Contributors here yet</p>
         )}
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <ContributeLink />
       </div>
     </div>
   );

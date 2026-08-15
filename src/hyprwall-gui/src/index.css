@@ -1,7 +1,47 @@
+@font-face {
+  font-family: "JetBrainsMono Nerd Font";
+  src: url("./assets/fonts/JetBrainsMonoNerdFontMono-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "JetBrainsMono Nerd Font";
+  src: url("./assets/fonts/JetBrainsMonoNerdFontMono-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 * {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
+}
+
+.settings-input {
+  background: transparent;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 5px 8px;
+  color: #eee;
+  font-size: 13px;
+  outline: none;
+}
+
+.settings-input::placeholder {
+  color: #4a4a4a;
+}
+
+.settings-input:focus {
+  border-color: #555;
+}
+
+/* Monitors dropdown "Group" mode: unselected tiles hover orange, selected
+   ones are set green inline (inline wins over this, so no conflict). */
+.monitor-tile-hover-orange:hover {
+  border-color: #f97316 !important;
 }

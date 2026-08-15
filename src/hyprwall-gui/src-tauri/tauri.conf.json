@@ -11,12 +11,12 @@
   },
   "app": {
     "windows": [
-      { "title": "HyprWall", "width": 1000, "height": 700, "center": true, "resizable": true }
+      { "title": "HyprWall", "width": 1000, "height": 700, "center": true, "resizable": true, "decorations": false }
     ],
     "security": {
       "assetProtocol": {
         "enable": true,
-        "scope": ["$HOME/.cache/hyprwall-gui/thumbnails/*"]
+        "scope": ["$HOME/.cache/hyprwall-gui/thumbnails/*", "$HOME/.cache/hyprwall-gui/monitor-snapshots/*"]
       }
     }
   },

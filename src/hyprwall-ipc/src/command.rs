@@ -4,6 +4,7 @@ use std::fmt;
 pub enum Command {
     MonitorList,
     Set { monitors: Vec<String>, path: String },
+    Unset { monitor: String },
     Pause { monitor: String },
     Play { monitor: String },
     Get { monitor: String },
@@ -63,6 +64,8 @@ pub fn parse_command(line: &str) -> Result<Command, ParseError> {
             }
             Ok(Command::Set { monitors, path: path.to_string() })
         }
+        "unset" if !rest.is_empty() => Ok(Command::Unset { monitor: rest.to_string() }),
+        "unset" => Err(ParseError::MissingArg { verb: "unset", arg: "monitor" }),
         "pause" if !rest.is_empty() => Ok(Command::Pause { monitor: rest.to_string() }),
         "pause" => Err(ParseError::MissingArg { verb: "pause", arg: "monitor" }),
         "play" if !rest.is_empty() => Ok(Command::Play { monitor: rest.to_string() }),
@@ -80,6 +83,7 @@ impl Command {
             Command::Set { monitors, path } => {
                 format!("set {} {}", monitors.join(","), path)
             }
+            Command::Unset { monitor } => format!("unset {monitor}"),
             Command::Pause { monitor } => format!("pause {monitor}"),
             Command::Play { monitor } => format!("play {monitor}"),
             Command::Get { monitor } => format!("get {monitor}"),
@@ -123,6 +127,22 @@ mod tests {
         assert_eq!(parse_command("pause eDP-1"), Ok(Command::Pause { monitor: "eDP-1".to_string() }));
         assert_eq!(parse_command("play eDP-1"), Ok(Command::Play { monitor: "eDP-1".to_string() }));
         assert_eq!(parse_command("get eDP-1"), Ok(Command::Get { monitor: "eDP-1".to_string() }));
+    }
+
+    #[test]
+    fn parses_unset() {
+        assert_eq!(parse_command("unset eDP-1"), Ok(Command::Unset { monitor: "eDP-1".to_string() }));
+    }
+
+    #[test]
+    fn rejects_unset_missing_monitor() {
+        assert_eq!(parse_command("unset"), Err(ParseError::MissingArg { verb: "unset", arg: "monitor" }));
+    }
+
+    #[test]
+    fn to_wire_round_trips_unset() {
+        let cmd = Command::Unset { monitor: "eDP-1".to_string() };
+        assert_eq!(parse_command(&cmd.to_wire()), Ok(cmd));
     }
 
     #[test]

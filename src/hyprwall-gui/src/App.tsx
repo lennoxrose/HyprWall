@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { MonitorLayout } from "./components/MonitorLayout";
+import { TitleBar } from "./components/TitleBar";
+import { MonitorsDropdown } from "./components/MonitorsDropdown";
+import { SettingsModal } from "./components/SettingsModal";
 import { LibraryGrid } from "./components/LibraryGrid";
-import { AssignButton } from "./components/AssignButton";
-import { StatusBanner } from "./components/StatusBanner";
+import { EmptyLibraryState } from "./components/EmptyLibraryState";
+import { ErrorState } from "./components/ErrorState";
 import { useSelection } from "./state/selection";
 import {
   DaemonUnreachableError,
@@ -23,6 +25,8 @@ export default function App() {
   const [newFolder, setNewFolder] = useState("");
   const [daemonDown, setDaemonDown] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [monitorsOpen, setMonitorsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const { selectedMonitors, toggleMonitor, selectedWallpaper, setSelectedWallpaper } = useSelection();
 
   const refresh = useCallback(async () => {
@@ -54,10 +58,10 @@ export default function App() {
   // Runs a single per-command action (assign/pause/play/folder edit).
   // `Response::Error` from a specific command (e.g. "unknown monitor") is
   // not the same failure as the daemon being unreachable -- it's shown
-  // inline near the control that triggered it instead of the persistent
-  // StatusBanner, per the spec's error-handling split. A DaemonUnreachableError
-  // still flips the banner, since at that point every control is about to be
-  // disabled anyway.
+  // inline near the control that triggered it instead of the whole-page
+  // ErrorState, per the spec's error-handling split. A DaemonUnreachableError
+  // still flips daemonDown, since at that point every control is about to
+  // be disabled anyway.
   const runAction = async (fn: () => Promise<void>) => {
     setActionError(null);
     try {
@@ -82,64 +86,77 @@ export default function App() {
   const removeFolder = (folder: string) =>
     runAction(() => setLibraryFolders(folders.filter((f) => f !== folder)));
 
-  const assign = () =>
-    runAction(() => {
-      if (selectedMonitors.size === 0 || !selectedWallpaper) return Promise.resolve();
-      return setWallpaper(Array.from(selectedMonitors), selectedWallpaper);
-    });
+  // Auto-saves as soon as a wallpaper is picked -- no separate "Assign"
+  // confirmation step. If no monitor is selected yet, this just records
+  // the wallpaper pick (via setSelectedWallpaper) without calling out;
+  // picking a monitor afterward doesn't retroactively assign, so the
+  // expected flow is monitor(s) first, then wallpaper.
+  const selectWallpaper = (path: string) => {
+    setSelectedWallpaper(path);
+    if (selectedMonitors.size === 0) return;
+    runAction(() => setWallpaper(Array.from(selectedMonitors), path));
+  };
 
   const pause = (monitor: string) => runAction(() => pauseWallpaper(monitor));
   const play = (monitor: string) => runAction(() => playWallpaper(monitor));
 
   return (
-    <div style={{ fontFamily: "sans-serif", color: "#eee", background: "#0a0a0a", minHeight: "100vh" }}>
-      {daemonDown && <StatusBanner />}
-      <fieldset disabled={daemonDown} style={{ border: "none", padding: 16 }}>
-        <h1>HyprWall</h1>
-        {actionError && (
-          <p style={{ color: "#f87171", fontSize: 13 }} role="alert">
-            {actionError}
-          </p>
+    <div
+      style={{
+        position: "relative",
+        display: "flex",
+        flexDirection: "column",
+        height: "100vh",
+        overflow: "hidden",
+        fontFamily: "sans-serif",
+        color: "#eee",
+        background: "#0a0a0a",
+      }}
+    >
+      <TitleBar
+        monitorsOpen={monitorsOpen}
+        onToggleMonitors={() => setMonitorsOpen((o) => !o)}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        folders={folders}
+        newFolder={newFolder}
+        onNewFolderChange={setNewFolder}
+        onAddFolder={addFolder}
+        onRemoveFolder={removeFolder}
+      />
+      <MonitorsDropdown
+        open={monitorsOpen}
+        monitors={monitors}
+        selected={selectedMonitors}
+        onToggle={toggleMonitor}
+        onClose={() => setMonitorsOpen(false)}
+        onPause={pause}
+        onPlay={play}
+      />
+      <fieldset
+        disabled={daemonDown}
+        style={{ border: "none", padding: 16, margin: 0, flex: 1, overflow: "auto" }}
+      >
+        {daemonDown ? (
+          <ErrorState message="hyprwalld is not running or unreachable. Start it — this will recover automatically." />
+        ) : (
+          <>
+            {actionError && (
+              <p style={{ color: "#f87171", fontSize: 13 }} role="alert">
+                {actionError}
+              </p>
+            )}
+
+            {folders.length === 0 ? (
+              <EmptyLibraryState />
+            ) : (
+              <LibraryGrid wallpapers={wallpapers} selected={selectedWallpaper} onSelect={selectWallpaper} />
+            )}
+          </>
         )}
-
-        <section>
-          <h2>Monitors</h2>
-          <MonitorLayout monitors={monitors} selected={selectedMonitors} onToggle={toggleMonitor} />
-          {Array.from(selectedMonitors).map((name) => {
-            const m = monitors.find((mon) => mon.name === name);
-            if (!m?.current_path) return null;
-            return (
-              <div key={name}>
-                {name}: <button onClick={() => pause(name)}>Pause</button>
-                <button onClick={() => play(name)}>Play</button>
-              </div>
-            );
-          })}
-        </section>
-
-        <section>
-          <h2>Library folders</h2>
-          <ul>
-            {folders.map((f) => (
-              <li key={f}>
-                {f} <button onClick={() => removeFolder(f)}>Remove</button>
-              </li>
-            ))}
-          </ul>
-          <input
-            value={newFolder}
-            onChange={(e) => setNewFolder(e.target.value)}
-            placeholder="/absolute/path"
-          />
-          <button onClick={addFolder}>Add folder</button>
-        </section>
-
-        <section>
-          <h2>Wallpapers</h2>
-          <LibraryGrid wallpapers={wallpapers} selected={selectedWallpaper} onSelect={setSelectedWallpaper} />
-        </section>
-
-        <AssignButton disabled={selectedMonitors.size === 0 || !selectedWallpaper} onClick={assign} />
       </fieldset>
     </div>
   );

@@ -22,6 +22,7 @@ use std::ffi::c_void;
 use std::rc::Rc;
 
 use egl_context::{EglCore, MonitorSurface};
+use glow::HasContext;
 use mpv_instance::MpvInstance;
 use zone_target::ZoneTarget;
 
@@ -133,6 +134,31 @@ impl RenderResources {
     /// triggered dissolve, there is no replacement zone to also set up here.
     pub fn teardown_zone(&mut self, zone_id: u64) {
         self.drop_zone_playback(zone_id);
+    }
+
+    /// Clears one monitor's surface to black. Called after `Command::Unset`
+    /// removes a monitor from a zone (whether or not the zone itself
+    /// dissolved): without this, the monitor's layer-shell surface simply
+    /// keeps showing whatever frame was blitted into it last, since nothing
+    /// draws to it again once it's no longer any zone's member -- "removed
+    /// the wallpaper" would otherwise look like nothing happened. A no-op if
+    /// there's no GL context yet or this monitor's surface isn't tracked
+    /// (headless tests, or a monitor whose first Wayland `configure` hasn't
+    /// landed yet).
+    pub fn clear_monitor(&mut self, name: &str) {
+        let Some(core) = self.core.clone() else { return };
+        let Some(surface) = self.monitor_surfaces.get(name).cloned() else { return };
+        if let Err(e) = surface.make_current() {
+            eprintln!("hyprwalld: eglMakeCurrent failed clearing {name}: {e}");
+            return;
+        }
+        unsafe {
+            core.gl.clear_color(0.0, 0.0, 0.0, 1.0);
+            core.gl.clear(glow::COLOR_BUFFER_BIT);
+        }
+        if let Err(e) = surface.swap_buffers() {
+            eprintln!("hyprwalld: eglSwapBuffers failed clearing {name}: {e}");
+        }
     }
 
     /// Records (or overwrites) a pending `Set` for `outcome.zone_id`, so it

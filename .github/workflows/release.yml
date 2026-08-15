@@ -1,0 +1,33 @@
+name: Release
+
+# Fires on every push to master -- i.e. after a staging -> master promotion
+# PR merges, which branch protection already restricts to a PR carrying
+# lennoxrose's code-owner approval (see .github/CODEOWNERS and the
+# branch-protection notes in the PR that added this workflow). Nothing
+# further gates this: the human decision already happened at merge time.
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the workspace version
+        id: version
+        run: |
+          VERSION=$(grep -m1 '^version' Cargo.toml | sed -E 's/version = "(.*)"/\1/')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          target_commitish: master

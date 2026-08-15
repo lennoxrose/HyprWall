@@ -1,0 +1,7 @@
+# Requires lennoxrose's approval on every PR into master (branch protection
+# has require_code_owner_reviews: true there) -- the closest enforceable
+# approximation of "only lennoxrose merges to master" that a personal
+# (non-organization) GitHub repo supports. See the branch-protection setup
+# notes in the PR that added this file for what a true per-user push
+# restriction would need (converting to an Organization).
+* @lennoxrose

@@ -12,6 +12,7 @@ interface Props {
 
 const SIDEBAR_WIDTH = 280;
 const PANEL_RADIUS = 14; // matches MonitorsDropdown's PANEL_RADIUS
+const OUTER_GAP = 10; // breathing room between the panel and the navbar/window bottom
 
 const DEFAULT_SETTINGS: WallpaperSettings = {
   zoom: 1,
@@ -100,9 +101,9 @@ export function Sidebar({ path, kind, onClose }: Props) {
     <div
       style={{
         position: "absolute",
-        top: TITLEBAR_HEIGHT,
+        top: TITLEBAR_HEIGHT + OUTER_GAP,
         right: 0,
-        bottom: 0,
+        bottom: OUTER_GAP,
         zIndex: 20,
         width: SIDEBAR_WIDTH,
         willChange: "transform",

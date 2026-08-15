@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { captureMonitorSnapshot } from "../lib/api";
+import { DROPDOWN_ANIM_MS } from "./TitleBar";
 import type { MonitorState } from "../lib/types";
 
 interface Props {
@@ -20,25 +21,34 @@ const RADIUS = 8;
 export function MonitorLayout({ monitors, selected, onToggle, open }: Props) {
   const [snapshots, setSnapshots] = useState<Record<string, string>>({});
 
+  // Waits for the slide-open transition to fully settle before firing any
+  // capture_monitor_snapshot calls. Each capture shells out to grim (real
+  // wall-clock time), and the resulting setSnapshots + <img> mount was
+  // landing mid-transition -- a repaint colliding with an in-flight CSS
+  // animation is exactly what reads as a jump/stutter partway through.
+  // Closing never touches this at all, which is why only opening jumped.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    for (const m of monitors) {
-      captureMonitorSnapshot(m.name)
-        .then((path) => {
-          if (cancelled) return;
-          // No cache-busting query string: Tauri's asset protocol on this
-          // platform doesn't resolve a path with `?...` appended (broke
-          // image loading entirely). Each mount already re-invokes the
-          // capture command, so the only staleness risk is the webview's
-          // own image cache serving a previous open's bitmap for the exact
-          // same path -- acceptable for a "quick snapshot", not a live feed.
-          setSnapshots((prev) => ({ ...prev, [m.name]: convertFileSrc(path) }));
-        })
-        .catch(() => {});
-    }
+    const timer = setTimeout(() => {
+      for (const m of monitors) {
+        captureMonitorSnapshot(m.name)
+          .then((path) => {
+            if (cancelled) return;
+            // No cache-busting query string: Tauri's asset protocol on this
+            // platform doesn't resolve a path with `?...` appended (broke
+            // image loading entirely). Each open already re-invokes the
+            // capture command, so the only staleness risk is the webview's
+            // own image cache serving a previous open's bitmap for the
+            // exact same path -- acceptable for a "quick snapshot".
+            setSnapshots((prev) => ({ ...prev, [m.name]: convertFileSrc(path) }));
+          })
+          .catch(() => {});
+      }
+    }, DROPDOWN_ANIM_MS);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);

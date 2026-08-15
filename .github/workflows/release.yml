@@ -1,0 +1,80 @@
+name: Release
+
+# Fires on every push to master -- i.e. after a staging -> master promotion
+# PR merges, which branch protection already restricts to a PR carrying
+# lennoxrose's code-owner approval (see .github/CODEOWNERS and the
+# branch-protection notes in the PR that added this workflow). Nothing
+# further gates this: the human decision already happened at merge time.
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the workspace version
+        id: version
+        run: |
+          VERSION=$(grep -m1 '^version' Cargo.toml | sed -E 's/version = "(.*)"/\1/')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          target_commitish: master
+
+  # Built inside an Arch container, not ubuntu-latest -- attached to the
+  # Release as a manual-download tarball for Arch users, so it must link
+  # against the exact same glibc/GTK/WebKit/mpv .so versions Arch ships,
+  # not Ubuntu's. Not published to the AUR: registration there has been
+  # closed since June 2025 as an anti-takeover mitigation, so a
+  # hyprwall-bin AUR package isn't viable right now -- hyprwall-git
+  # (packaging/PKGBUILD, source-build/rolling) still covers AUR users.
+  build-linux-bin:
+    needs: release
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Install build dependencies
+        run: |
+          pacman -Syu --noconfirm --needed git rust nodejs npm \
+            mpv wayland mesa gtk3 webkit2gtk-4.1 libappindicator-gtk3 librsvg
+
+      - uses: actions/checkout@v4
+
+      - name: npm ci && npm run build
+        working-directory: src/hyprwall-gui
+        run: |
+          npm ci
+          npm run build
+
+      - name: cargo build --release
+        run: cargo build --release --workspace
+
+      - name: Package the release tarball
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          STAGE=$(mktemp -d)
+          cp target/release/hyprwalld target/release/hyprwallctl target/release/hyprwall-gui "$STAGE/"
+          cp packaging/hyprwall-gui.desktop "$STAGE/"
+          cp src/hyprwall-gui/src-tauri/icons/icon.png "$STAGE/hyprwall.png"
+          cp packaging/systemd/hyprwalld.socket packaging/systemd/hyprwalld.service "$STAGE/"
+          tar -czf "hyprwall-${VERSION}-x86_64.tar.gz" -C "$STAGE" .
+
+      - name: Attach the tarball to the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.release.outputs.version }}
+          files: hyprwall-*-x86_64.tar.gz

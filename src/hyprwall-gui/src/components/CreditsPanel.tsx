@@ -155,7 +155,7 @@ export function CreditsPanel() {
   const hasContributors = otherContributors.length > 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20, height: "100%" }}>
       {owner && (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
           <img src={owner.avatar_url} alt={owner.login} style={{ ...AVATAR_STYLE, width: 72, height: 72 }} />
@@ -209,7 +209,7 @@ export function CreditsPanel() {
         )}
       </div>
 
-      <div style={{ display: "flex", justifyContent: "center" }}>
+      <div style={{ display: "flex", justifyContent: "center", marginTop: "auto" }}>
         <ContributeLink />
       </div>
     </div>

@@ -106,16 +106,15 @@ export default function App() {
       }}
     >
       <TitleBar monitorsOpen={monitorsOpen} onToggleMonitors={() => setMonitorsOpen((o) => !o)} />
-      {monitorsOpen && (
-        <MonitorsDropdown
-          monitors={monitors}
-          selected={selectedMonitors}
-          onToggle={toggleMonitor}
-          onClose={() => setMonitorsOpen(false)}
-          onPause={pause}
-          onPlay={play}
-        />
-      )}
+      <MonitorsDropdown
+        open={monitorsOpen}
+        monitors={monitors}
+        selected={selectedMonitors}
+        onToggle={toggleMonitor}
+        onClose={() => setMonitorsOpen(false)}
+        onPause={pause}
+        onPlay={play}
+      />
       {daemonDown && <StatusBanner />}
       <fieldset
         disabled={daemonDown}

@@ -16,7 +16,7 @@
     "security": {
       "assetProtocol": {
         "enable": true,
-        "scope": ["$HOME/.cache/hyprwall-gui/thumbnails/*"]
+        "scope": ["$HOME/.cache/hyprwall-gui/thumbnails/*", "$HOME/.cache/hyprwall-gui/monitor-snapshots/*"]
       }
     }
   },

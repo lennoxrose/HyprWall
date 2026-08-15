@@ -15,6 +15,7 @@ fn main() {
             commands::monitors::set_wallpaper,
             commands::monitors::pause_wallpaper,
             commands::monitors::play_wallpaper,
+            commands::snapshot::capture_monitor_snapshot,
         ])
         .run(tauri::generate_context!())
         .expect("error while running hyprwall-gui");

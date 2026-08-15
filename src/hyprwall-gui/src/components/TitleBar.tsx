@@ -1,6 +1,10 @@
 export const TITLEBAR_HEIGHT = 30;
 export const TITLEBAR_BLUE = "#2563eb";
 export const NERD_FONT = '"JetBrainsMono Nerd Font", "JetBrains Mono", monospace';
+/** Shared pace for every Monitors-dropdown-related animation (panel slide,
+ * corner notch fade, chevron rotation) -- opening and closing both use this
+ * same duration, deliberately not asymmetric. */
+export const DROPDOWN_ANIM_MS = 380;
 
 function CogIcon() {
   return (
@@ -21,7 +25,10 @@ function DoubleChevron({ direction = "down" }: { direction?: "down" | "up" }) {
       height="13"
       viewBox="0 0 24 24"
       fill="none"
-      style={{ transform: direction === "up" ? "rotate(180deg)" : undefined }}
+      style={{
+        transform: direction === "up" ? "rotate(180deg)" : "rotate(0deg)",
+        transition: `transform ${DROPDOWN_ANIM_MS}ms ease`,
+      }}
     >
       <path d="M3 5 L12 12 L21 5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="butt" strokeLinejoin="miter" />
       <path d="M3 13 L12 20 L21 13" stroke="currentColor" strokeWidth="2.5" strokeLinecap="butt" strokeLinejoin="miter" />
@@ -40,6 +47,7 @@ export function TitleBar({ monitorsOpen, onToggleMonitors }: Props) {
       data-tauri-drag-region
       style={{
         position: "relative",
+        zIndex: 30,
         display: "flex",
         alignItems: "center",
         height: TITLEBAR_HEIGHT,

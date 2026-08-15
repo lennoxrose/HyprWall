@@ -61,7 +61,6 @@ const CLEAR_COLOR: (f32, f32, f32, f32) = (0.05, 0.05, 0.08, 1.0);
 pub struct WaylandBackend {
     pub conn: Connection,
     pub event_queue: wayland_client::EventQueue<AppData>,
-    pub qh: QueueHandle<AppData>,
 }
 
 pub struct AppData {
@@ -126,7 +125,7 @@ impl WaylandBackend {
         let registry_state = RegistryState::new(&globals);
         let output_state = OutputState::new(&globals, &qh);
 
-        let backend = WaylandBackend { conn, event_queue, qh };
+        let backend = WaylandBackend { conn, event_queue };
         let data = AppData {
             registry_state,
             output_state,

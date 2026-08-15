@@ -1,13 +1,19 @@
 import { useEffect, useState } from "react";
 import { NERD_FONT, TITLEBAR_BLUE } from "./TitleBar";
-import { getBackgroundServiceEnabled, setBackgroundServiceEnabled } from "../lib/api";
+import { CreditsPanel } from "./CreditsPanel";
+import {
+  getBackgroundServiceEnabled,
+  getStartOnLoginEnabled,
+  setBackgroundServiceEnabled,
+  setStartOnLoginEnabled,
+} from "../lib/api";
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  libraryPath: string;
-  onLibraryPathChange: (value: string) => void;
-  onSaveLibraryPath: () => void;
+  libraryFolders: string[];
+  onAddLibraryFolder: (path: string) => void;
+  onRemoveLibraryFolder: (path: string) => void;
 }
 
 interface Category {
@@ -15,25 +21,72 @@ interface Category {
   label: string;
 }
 
-// "Startup" has no content yet -- it's a placeholder category for a later
-// prompt, not wired to anything.
 const CATEGORIES: Category[] = [
   { id: "system", label: "System" },
   { id: "startup", label: "Startup" },
+  { id: "credits", label: "Credits" },
 ];
 
 const BORDER = "1px solid #333";
 
+/** A labeled on/off pill, used for every systemd-backed toggle on the
+ * Startup tab -- green "Enabled" when on, matching the app's selected-state
+ * color elsewhere (`LibraryGrid`'s selected border, `MonitorLayout`'s
+ * selected tile). */
+function ToggleRow({
+  label,
+  enabled,
+  onToggle,
+  error,
+}: {
+  label: string;
+  enabled: boolean | null;
+  onToggle: () => void;
+  error: string | null;
+}) {
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: 5 }}>
+        <span style={{ fontSize: 13, fontWeight: 500, color: "#bbb" }}>{label}</span>
+        <button
+          onClick={onToggle}
+          disabled={enabled === null}
+          style={{
+            border: "none",
+            borderRadius: 6,
+            padding: "5px 12px",
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: enabled === null ? "default" : "pointer",
+            background: enabled ? "#4ade80" : "#3a3a3a",
+            color: enabled ? "#0a0a0a" : "#ccc",
+          }}
+        >
+          {enabled === null ? "..." : enabled ? "Enabled" : "Disabled"}
+        </button>
+      </div>
+      {error && (
+        <p style={{ color: "#f87171", fontSize: 12, margin: "4px 0 0" }} role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function SettingsModal({
   open,
   onClose,
-  libraryPath,
-  onLibraryPathChange,
-  onSaveLibraryPath,
+  libraryFolders,
+  onAddLibraryFolder,
+  onRemoveLibraryFolder,
 }: Props) {
   const [category, setCategory] = useState(CATEGORIES[0].id);
+  const [newFolder, setNewFolder] = useState("");
   const [backgroundEnabled, setBackgroundEnabledState] = useState<boolean | null>(null);
   const [backgroundError, setBackgroundError] = useState<string | null>(null);
+  const [startOnLoginEnabled, setStartOnLoginEnabledState] = useState<boolean | null>(null);
+  const [startOnLoginError, setStartOnLoginError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -43,7 +96,19 @@ export function SettingsModal({
         setBackgroundError(null);
       })
       .catch((err) => setBackgroundError(String(err instanceof Error ? err.message : err)));
+    getStartOnLoginEnabled()
+      .then((enabled) => {
+        setStartOnLoginEnabledState(enabled);
+        setStartOnLoginError(null);
+      })
+      .catch((err) => setStartOnLoginError(String(err instanceof Error ? err.message : err)));
   }, [open]);
+
+  const addFolder = () => {
+    if (!newFolder.trim()) return;
+    onAddLibraryFolder(newFolder);
+    setNewFolder("");
+  };
 
   const toggleBackgroundService = () => {
     if (backgroundEnabled === null) return;
@@ -54,6 +119,17 @@ export function SettingsModal({
         setBackgroundError(null);
       })
       .catch((err) => setBackgroundError(String(err instanceof Error ? err.message : err)));
+  };
+
+  const toggleStartOnLogin = () => {
+    if (startOnLoginEnabled === null) return;
+    const next = !startOnLoginEnabled;
+    setStartOnLoginEnabled(next)
+      .then(() => {
+        setStartOnLoginEnabledState(next);
+        setStartOnLoginError(null);
+      })
+      .catch((err) => setStartOnLoginError(String(err instanceof Error ? err.message : err)));
   };
 
   if (!open) return null;
@@ -131,47 +207,93 @@ export function SettingsModal({
 
         <div style={{ flex: 1, padding: 16, color: "#eee", overflow: "auto" }}>
           {category === "system" && (
-            <>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: 5 }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: "#bbb" }}>Media Library Folder</span>
+            <div style={{ padding: 5 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: "#bbb", marginBottom: 8 }}>
+                Media Library Folders
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
+                {libraryFolders.map((folder) => (
+                  <div
+                    key={folder}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                      border: "1px solid #333",
+                      borderRadius: 4,
+                      padding: "5px 8px",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 12,
+                        color: "#ccc",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {folder}
+                    </span>
+                    <button
+                      onClick={() => onRemoveLibraryFolder(folder)}
+                      aria-label={`Remove ${folder}`}
+                      style={{ background: "transparent", border: "none", color: "#999", fontSize: 14, cursor: "pointer" }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
                 <input
                   className="settings-input"
-                  style={{ width: 500 }}
-                  value={libraryPath}
-                  onChange={(e) => onLibraryPathChange(e.target.value)}
+                  style={{ flex: 1 }}
+                  value={newFolder}
+                  onChange={(e) => setNewFolder(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") onSaveLibraryPath();
+                    if (e.key === "Enter") addFolder();
                   }}
-                  onBlur={onSaveLibraryPath}
                   placeholder="/absolute/path"
                 />
-              </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: 5, marginTop: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: "#bbb" }}>Run in Background</span>
                 <button
-                  onClick={toggleBackgroundService}
-                  disabled={backgroundEnabled === null}
+                  onClick={addFolder}
                   style={{
                     border: "none",
                     borderRadius: 6,
                     padding: "5px 12px",
                     fontSize: 12,
                     fontWeight: 600,
-                    cursor: backgroundEnabled === null ? "default" : "pointer",
-                    background: backgroundEnabled ? "#4ade80" : "#3a3a3a",
-                    color: backgroundEnabled ? "#0a0a0a" : "#ccc",
+                    cursor: "pointer",
+                    background: "#4ade80",
+                    color: "#0a0a0a",
                   }}
                 >
-                  {backgroundEnabled === null ? "..." : backgroundEnabled ? "Enabled" : "Disabled"}
+                  Add
                 </button>
               </div>
-              {backgroundError && (
-                <p style={{ color: "#f87171", fontSize: 12, margin: "4px 0 0" }} role="alert">
-                  {backgroundError}
-                </p>
-              )}
+            </div>
+          )}
+
+          {category === "startup" && (
+            <>
+              <ToggleRow
+                label="Run in Background"
+                enabled={backgroundEnabled}
+                onToggle={toggleBackgroundService}
+                error={backgroundError}
+              />
+              <ToggleRow
+                label="Start on Login"
+                enabled={startOnLoginEnabled}
+                onToggle={toggleStartOnLogin}
+                error={startOnLoginError}
+              />
             </>
           )}
+
+          {category === "credits" && <CreditsPanel />}
         </div>
       </div>
     </div>

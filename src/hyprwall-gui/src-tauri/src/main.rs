@@ -18,6 +18,7 @@ fn main() {
     unsafe { libc::setlocale(libc::LC_NUMERIC, c"C".as_ptr()) };
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
         .manage(commands::library_watch::WatcherState::default())
         .invoke_handler(tauri::generate_handler![
             commands::audio_probe::has_audio_track,
@@ -32,6 +33,8 @@ fn main() {
             commands::monitors::play_wallpaper,
             commands::service::get_background_service_enabled,
             commands::service::set_background_service_enabled,
+            commands::service::get_start_on_login_enabled,
+            commands::service::set_start_on_login_enabled,
             commands::snapshot::capture_monitor_snapshot,
             commands::wallpaper_settings::get_wallpaper_settings,
             commands::wallpaper_settings::set_wallpaper_settings,

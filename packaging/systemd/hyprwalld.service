@@ -10,3 +10,4 @@ Type=simple
 
 [Install]
 Also=hyprwalld.socket
+WantedBy=graphical-session.target

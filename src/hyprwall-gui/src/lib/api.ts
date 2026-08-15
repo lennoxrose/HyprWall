@@ -42,6 +42,11 @@ export const getBackgroundServiceEnabled = () => call<boolean>("get_background_s
 export const setBackgroundServiceEnabled = (enabled: boolean) =>
   call<void>("set_background_service_enabled", { enabled });
 
+export const getStartOnLoginEnabled = () => call<boolean>("get_start_on_login_enabled");
+
+export const setStartOnLoginEnabled = (enabled: boolean) =>
+  call<void>("set_start_on_login_enabled", { enabled });
+
 export const getWallpaperSettings = (path: string) =>
   call<WallpaperSettings>("get_wallpaper_settings", { path });
 

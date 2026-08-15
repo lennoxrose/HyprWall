@@ -1,4 +1,5 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { ErrorState } from "./ErrorState";
 import type { WallpaperEntry } from "../lib/types";
 
 interface Props {
@@ -9,7 +10,7 @@ interface Props {
 
 export function LibraryGrid({ wallpapers, selected, onSelect }: Props) {
   if (wallpapers.length === 0) {
-    return <p>No video files found in the configured library folders.</p>;
+    return <ErrorState message="no video files were found in the configured library folders." />;
   }
 
   return (

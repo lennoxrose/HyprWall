@@ -43,9 +43,10 @@ function DoubleChevron({ direction = "down" }: { direction?: "down" | "up" }) {
 interface Props {
   monitorsOpen: boolean;
   onToggleMonitors: () => void;
+  onOpenSettings: () => void;
 }
 
-export function TitleBar({ monitorsOpen, onToggleMonitors }: Props) {
+export function TitleBar({ monitorsOpen, onToggleMonitors, onOpenSettings }: Props) {
   return (
     <div
       data-tauri-drag-region
@@ -74,19 +75,19 @@ export function TitleBar({ monitorsOpen, onToggleMonitors }: Props) {
         style={{
           position: "absolute",
           left: "50%",
-          top: 0,
-          height: "100%",
-          transform: "translateX(-50%)",
+          top: "50%",
+          transform: "translate(-50%, -50%)",
           display: "flex",
           alignItems: "center",
           gap: 7,
           border: "none",
+          borderRadius: 6,
           background: monitorsOpen ? "rgba(255,255,255,0.14)" : "transparent",
           color: "#fff",
           fontFamily: NERD_FONT,
           fontSize: 13,
           fontWeight: 600,
-          padding: "0 12px",
+          padding: "4px 12px",
           cursor: "pointer",
         }}
       >
@@ -95,9 +96,23 @@ export function TitleBar({ monitorsOpen, onToggleMonitors }: Props) {
         <DoubleChevron direction={monitorsOpen ? "up" : "down"} />
       </button>
 
-      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", paddingRight: 10 }}>
+      <button
+        onClick={onOpenSettings}
+        aria-label="Settings"
+        style={{
+          marginLeft: "auto",
+          display: "flex",
+          alignItems: "center",
+          height: "100%",
+          padding: "0 10px",
+          border: "none",
+          background: "transparent",
+          color: "#fff",
+          cursor: "pointer",
+        }}
+      >
         <CogIcon />
-      </div>
+      </button>
     </div>
   );
 }

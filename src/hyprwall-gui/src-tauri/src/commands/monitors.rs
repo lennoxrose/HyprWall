@@ -40,6 +40,11 @@ pub fn set_wallpaper(monitors: Vec<String>, path: String) -> Result<(), String> 
 }
 
 #[tauri::command]
+pub fn unset_wallpaper(monitor: String) -> Result<(), String> {
+    ok_or_error(send_and_parse(&default_socket_path(), Command::Unset { monitor })?)
+}
+
+#[tauri::command]
 pub fn pause_wallpaper(monitor: String) -> Result<(), String> {
     ok_or_error(send_and_parse(&default_socket_path(), Command::Pause { monitor })?)
 }
@@ -117,6 +122,24 @@ mod tests {
         let states = list_monitors_at(&socket_path).unwrap();
         server.join().unwrap();
         assert_eq!(states[0].current_path, None);
+    }
+
+    #[test]
+    fn unset_wallpaper_sends_the_unset_command() {
+        let dir = tempfile::tempdir().unwrap();
+        let socket_path = dir.path().join("hyprwall.sock");
+        let listener = UnixListener::bind(&socket_path).unwrap();
+        let server = thread::spawn(move || {
+            let (mut conn, _) = listener.accept().unwrap();
+            let mut received = String::new();
+            conn.read_to_string(&mut received).unwrap();
+            assert_eq!(received.trim_end(), "unset eDP-1");
+            conn.write_all(b"ok").unwrap();
+        });
+
+        let resp = send_and_parse(&socket_path, Command::Unset { monitor: "eDP-1".to_string() }).unwrap();
+        server.join().unwrap();
+        assert_eq!(resp, Response::Ok);
     }
 
     #[test]

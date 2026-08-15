@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { captureMonitorSnapshot } from "../lib/api";
 import { DROPDOWN_ANIM_MS } from "./TitleBar";
+import { ErrorState } from "./ErrorState";
 import type { MonitorState } from "../lib/types";
 
 interface Props {
@@ -54,7 +55,7 @@ export function MonitorLayout({ monitors, selected, onToggle, open }: Props) {
   }, [open]);
 
   if (monitors.length === 0) {
-    return <p>No monitors reported by hyprwalld.</p>;
+    return <ErrorState message="no monitors were reported by hyprwalld." />;
   }
 
   const minX = Math.min(...monitors.map((m) => m.x));
@@ -81,7 +82,7 @@ export function MonitorLayout({ monitors, selected, onToggle, open }: Props) {
               height: m.h * scale - GAP,
               borderRadius: RADIUS,
               border: selected.has(m.name) ? "2px solid #4ade80" : "1px solid #555",
-              background: snapshot ? "#000" : m.current_path ? "#1e3a2e" : "#222",
+              background: "#3a3a3a",
               color: "#eee",
               fontSize: 12,
               cursor: "pointer",

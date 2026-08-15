@@ -38,9 +38,31 @@ pub fn handle_command(state: &mut AppState, cmd: Command, render: &mut RenderRes
             }
             Err(ZoneError::UnknownMonitor(name)) => Response::Error(format!("unknown monitor {name}")),
         },
+        Command::Unset { monitor } => handle_unset(state, render, &monitor),
         Command::Pause { monitor } => set_paused(state, render, &monitor, true),
         Command::Play { monitor } => set_paused(state, render, &monitor, false),
     }
+}
+
+/// Removes `monitor` from whatever zone currently holds it. If that was the
+/// zone's last monitor, the zone is dissolved and its playback resources
+/// (mpv instance, offscreen render target) are torn down via the exact same
+/// `RenderResources::teardown_zone` a monitor unplug already uses -- an
+/// explicit "remove wallpaper" is the same underlying operation as a
+/// hotplug-triggered removal, just user-initiated instead of Wayland-
+/// initiated. A multi-monitor zone that still has other members afterward
+/// keeps playing to them unaffected (same as unplugging one monitor out of
+/// a multi-monitor zone does).
+fn handle_unset(state: &mut AppState, render: &mut RenderResources, monitor: &str) -> Response {
+    if state.zones.zone_for_monitor(monitor).is_none() {
+        return Response::Error(format!("no wallpaper set for {monitor}"));
+    }
+    if let Some(dissolved_zone_id) = state.zones.remove_monitor(monitor) {
+        render.teardown_zone(dissolved_zone_id);
+    }
+    render.clear_monitor(monitor);
+    persist(state);
+    Response::Ok
 }
 
 /// Applies `monitors`/`path` via `ZoneManager::apply_set`, then wires up real
@@ -170,6 +192,76 @@ mod tests {
         let resp =
             handle_command(&mut state, Command::Get { monitor: "eDP-1".to_string() }, &mut render);
         assert_eq!(resp, Response::Error("no wallpaper set for eDP-1".to_string()));
+    }
+
+    #[test]
+    fn unset_on_a_monitor_with_no_wallpaper_returns_error() {
+        let mut state = state_with(&["eDP-1"]);
+        let mut render = RenderResources::new_headless_for_test();
+        let resp =
+            handle_command(&mut state, Command::Unset { monitor: "eDP-1".to_string() }, &mut render);
+        assert_eq!(resp, Response::Error("no wallpaper set for eDP-1".to_string()));
+    }
+
+    #[test]
+    fn unset_clears_a_solo_monitors_wallpaper() {
+        let mut state = state_with(&["eDP-1"]);
+        let mut render = RenderResources::new_headless_for_test();
+        handle_command(
+            &mut state,
+            Command::Set { monitors: vec!["eDP-1".to_string()], path: "/a.mp4".to_string() },
+            &mut render,
+        );
+
+        let resp =
+            handle_command(&mut state, Command::Unset { monitor: "eDP-1".to_string() }, &mut render);
+        assert_eq!(resp, Response::Ok);
+
+        let get_resp =
+            handle_command(&mut state, Command::Get { monitor: "eDP-1".to_string() }, &mut render);
+        assert_eq!(get_resp, Response::Error("no wallpaper set for eDP-1".to_string()));
+    }
+
+    #[test]
+    fn unset_persists_the_removal_to_config_file() {
+        let mut state = state_with(&["eDP-1"]);
+        let mut render = RenderResources::new_headless_for_test();
+        handle_command(
+            &mut state,
+            Command::Set { monitors: vec!["eDP-1".to_string()], path: "/a.mp4".to_string() },
+            &mut render,
+        );
+
+        handle_command(&mut state, Command::Unset { monitor: "eDP-1".to_string() }, &mut render);
+
+        let loaded = store::load(&state.config_path).unwrap();
+        assert!(loaded.zones.is_empty());
+    }
+
+    #[test]
+    fn unset_on_one_monitor_of_a_group_leaves_the_other_playing() {
+        let mut state = state_with(&["eDP-1", "HDMI-A-1"]);
+        let mut render = RenderResources::new_headless_for_test();
+        handle_command(
+            &mut state,
+            Command::Set {
+                monitors: vec!["eDP-1".to_string(), "HDMI-A-1".to_string()],
+                path: "/pano.mp4".to_string(),
+            },
+            &mut render,
+        );
+
+        let resp =
+            handle_command(&mut state, Command::Unset { monitor: "eDP-1".to_string() }, &mut render);
+        assert_eq!(resp, Response::Ok);
+
+        let edp1_get =
+            handle_command(&mut state, Command::Get { monitor: "eDP-1".to_string() }, &mut render);
+        assert_eq!(edp1_get, Response::Error("no wallpaper set for eDP-1".to_string()));
+
+        let hdmi_get =
+            handle_command(&mut state, Command::Get { monitor: "HDMI-A-1".to_string() }, &mut render);
+        assert_eq!(hdmi_get, Response::Path("/pano.mp4".to_string()));
     }
 
     #[test]

@@ -13,6 +13,7 @@ fn main() {
             commands::library::scan_library,
             commands::monitors::list_monitors,
             commands::monitors::set_wallpaper,
+            commands::monitors::unset_wallpaper,
             commands::monitors::pause_wallpaper,
             commands::monitors::play_wallpaper,
             commands::snapshot::capture_monitor_snapshot,

@@ -13,6 +13,7 @@ enum CliCommand {
     MonitorList,
     /// Assign a wallpaper to one monitor, or a comma-separated list to span them as one zone
     Set { monitors: String, path: String },
+    Unset { monitor: String },
     Pause { monitor: String },
     Play { monitor: String },
     Get { monitor: String },
@@ -26,6 +27,7 @@ fn main() {
             monitors: monitors.split(',').map(str::to_string).collect(),
             path,
         },
+        CliCommand::Unset { monitor } => Command::Unset { monitor },
         CliCommand::Pause { monitor } => Command::Pause { monitor },
         CliCommand::Play { monitor } => Command::Play { monitor },
         CliCommand::Get { monitor } => Command::Get { monitor },

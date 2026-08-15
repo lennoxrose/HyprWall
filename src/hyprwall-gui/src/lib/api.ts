@@ -20,6 +20,8 @@ export const listMonitors = () => call<MonitorState[]>("list_monitors");
 export const setWallpaper = (monitors: string[], path: string) =>
   call<void>("set_wallpaper", { monitors, path });
 
+export const unsetWallpaper = (monitor: string) => call<void>("unset_wallpaper", { monitor });
+
 export const pauseWallpaper = (monitor: string) => call<void>("pause_wallpaper", { monitor });
 
 export const playWallpaper = (monitor: string) => call<void>("play_wallpaper", { monitor });

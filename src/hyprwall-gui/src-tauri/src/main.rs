@@ -24,8 +24,6 @@ fn main() {
             commands::audio_probe::has_audio_track,
             commands::config::get_library_folders,
             commands::config::set_library_folders,
-            commands::config::get_default_fit_mode,
-            commands::config::set_default_fit_mode,
             commands::library::scan_library,
             commands::library_watch::watch_library_folders,
             commands::monitors::list_monitors,

@@ -3,13 +3,10 @@ import { NERD_FONT, TITLEBAR_BLUE } from "./TitleBar";
 import { CreditsPanel } from "./CreditsPanel";
 import {
   getBackgroundServiceEnabled,
-  getDefaultFitMode,
   getStartOnLoginEnabled,
   setBackgroundServiceEnabled,
-  setDefaultFitMode,
   setStartOnLoginEnabled,
 } from "../lib/api";
-import type { FitMode } from "../lib/types";
 
 interface Props {
   open: boolean;
@@ -18,8 +15,6 @@ interface Props {
   onAddLibraryFolder: (path: string) => void;
   onRemoveLibraryFolder: (path: string) => void;
 }
-
-const FIT_MODES: FitMode[] = ["cover", "contain", "stretch"];
 
 interface Category {
   id: string;
@@ -92,8 +87,6 @@ export function SettingsModal({
   const [backgroundError, setBackgroundError] = useState<string | null>(null);
   const [startOnLoginEnabled, setStartOnLoginEnabledState] = useState<boolean | null>(null);
   const [startOnLoginError, setStartOnLoginError] = useState<string | null>(null);
-  const [defaultFit, setDefaultFitState] = useState<FitMode | null>(null);
-  const [defaultFitError, setDefaultFitError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -109,22 +102,7 @@ export function SettingsModal({
         setStartOnLoginError(null);
       })
       .catch((err) => setStartOnLoginError(String(err instanceof Error ? err.message : err)));
-    getDefaultFitMode()
-      .then((fit) => {
-        setDefaultFitState(fit);
-        setDefaultFitError(null);
-      })
-      .catch((err) => setDefaultFitError(String(err instanceof Error ? err.message : err)));
   }, [open]);
-
-  const chooseDefaultFit = (fit: FitMode) => {
-    setDefaultFitMode(fit)
-      .then(() => {
-        setDefaultFitState(fit);
-        setDefaultFitError(null);
-      })
-      .catch((err) => setDefaultFitError(String(err instanceof Error ? err.message : err)));
-  };
 
   const addFolder = () => {
     if (!newFolder.trim()) return;
@@ -229,109 +207,73 @@ export function SettingsModal({
 
         <div style={{ flex: 1, padding: 16, color: "#eee", overflow: "auto" }}>
           {category === "system" && (
-            <>
-              <div style={{ padding: 5 }}>
-                <div style={{ fontSize: 13, fontWeight: 500, color: "#bbb", marginBottom: 8 }}>
-                  Media Library Folders
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
-                  {libraryFolders.map((folder) => (
-                    <div
-                      key={folder}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 8,
-                        border: "1px solid #333",
-                        borderRadius: 4,
-                        padding: "5px 8px",
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: 12,
-                          color: "#ccc",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {folder}
-                      </span>
-                      <button
-                        onClick={() => onRemoveLibraryFolder(folder)}
-                        aria-label={`Remove ${folder}`}
-                        style={{ background: "transparent", border: "none", color: "#999", fontSize: 14, cursor: "pointer" }}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <input
-                    className="settings-input"
-                    style={{ flex: 1 }}
-                    value={newFolder}
-                    onChange={(e) => setNewFolder(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") addFolder();
-                    }}
-                    placeholder="/absolute/path"
-                  />
-                  <button
-                    onClick={addFolder}
+            <div style={{ padding: 5 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: "#bbb", marginBottom: 8 }}>
+                Media Library Folders
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
+                {libraryFolders.map((folder) => (
+                  <div
+                    key={folder}
                     style={{
-                      border: "none",
-                      borderRadius: 6,
-                      padding: "5px 12px",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      background: "#4ade80",
-                      color: "#0a0a0a",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                      border: "1px solid #333",
+                      borderRadius: 4,
+                      padding: "5px 8px",
                     }}
                   >
-                    Add
-                  </button>
-                </div>
-              </div>
-
-              <div style={{ padding: 5, marginTop: 14 }}>
-                <div style={{ fontSize: 13, fontWeight: 500, color: "#bbb", marginBottom: 8 }}>
-                  Default Fit for New Pictures
-                </div>
-                <div style={{ display: "flex", gap: 6, width: 240 }}>
-                  {FIT_MODES.map((f) => (
-                    <button
-                      key={f}
-                      onClick={() => chooseDefaultFit(f)}
-                      disabled={defaultFit === null}
+                    <span
                       style={{
-                        flex: 1,
-                        border: "none",
-                        borderRadius: 6,
-                        padding: "6px 0",
                         fontSize: 12,
-                        fontWeight: 600,
-                        cursor: defaultFit === null ? "default" : "pointer",
-                        background: defaultFit === f ? "#4ade80" : "#3a3a3a",
-                        color: defaultFit === f ? "#0a0a0a" : "#ccc",
-                        textTransform: "capitalize",
+                        color: "#ccc",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
                       }}
                     >
-                      {f}
+                      {folder}
+                    </span>
+                    <button
+                      onClick={() => onRemoveLibraryFolder(folder)}
+                      aria-label={`Remove ${folder}`}
+                      style={{ background: "transparent", border: "none", color: "#999", fontSize: 14, cursor: "pointer" }}
+                    >
+                      ×
                     </button>
-                  ))}
-                </div>
-                {defaultFitError && (
-                  <p style={{ color: "#f87171", fontSize: 12, margin: "4px 0 0" }} role="alert">
-                    {defaultFitError}
-                  </p>
-                )}
+                  </div>
+                ))}
               </div>
-            </>
+              <div style={{ display: "flex", gap: 6 }}>
+                <input
+                  className="settings-input"
+                  style={{ flex: 1 }}
+                  value={newFolder}
+                  onChange={(e) => setNewFolder(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") addFolder();
+                  }}
+                  placeholder="/absolute/path"
+                />
+                <button
+                  onClick={addFolder}
+                  style={{
+                    border: "none",
+                    borderRadius: 6,
+                    padding: "5px 12px",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    background: "#4ade80",
+                    color: "#0a0a0a",
+                  }}
+                >
+                  Add
+                </button>
+              </div>
+            </div>
           )}
 
           {category === "startup" && (

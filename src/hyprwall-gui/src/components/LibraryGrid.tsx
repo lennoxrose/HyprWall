@@ -10,7 +10,7 @@ interface Props {
 
 export function LibraryGrid({ wallpapers, selected, onSelect }: Props) {
   if (wallpapers.length === 0) {
-    return <ErrorState message="no video files were found in the configured library folders." />;
+    return <ErrorState message="no wallpaper files were found in the configured library folders." />;
   }
 
   return (

@@ -5,6 +5,8 @@ use std::time::{Duration, Instant};
 
 use libmpv2::Mpv;
 
+use crate::commands::library::WallpaperKind;
+
 /// `~/.cache/hyprwall-gui/thumbnails` (or the platform equivalent of
 /// `dirs::cache_dir()`).
 pub fn thumbnail_cache_dir() -> anyhow::Result<PathBuf> {
@@ -24,8 +26,8 @@ fn cache_key(video_path: &str) -> String {
 
 /// Returns the cached thumbnail path for `video_path`, generating it first
 /// (via a one-shot headless mpv frame grab) if it isn't already cached.
-pub fn ensure_thumbnail(video_path: &str) -> anyhow::Result<PathBuf> {
-    ensure_thumbnail_in(&thumbnail_cache_dir()?, video_path)
+pub fn ensure_thumbnail(path: &str, kind: WallpaperKind) -> anyhow::Result<PathBuf> {
+    ensure_thumbnail_in(&thumbnail_cache_dir()?, path, kind)
 }
 
 /// Same as `ensure_thumbnail`, but against an explicit cache dir instead of
@@ -35,12 +37,12 @@ pub fn ensure_thumbnail(video_path: &str) -> anyhow::Result<PathBuf> {
 /// -- mutating it from multiple tests running in parallel threads in the
 /// same process is a real race (each test's call can see another test's
 /// value mid-run), not just a hypothetical one.
-fn ensure_thumbnail_in(cache_dir: &Path, video_path: &str) -> anyhow::Result<PathBuf> {
-    let dest = cache_dir.join(cache_key(video_path));
+fn ensure_thumbnail_in(cache_dir: &Path, path: &str, kind: WallpaperKind) -> anyhow::Result<PathBuf> {
+    let dest = cache_dir.join(cache_key(path));
     if dest.exists() {
         return Ok(dest);
     }
-    generate_thumbnail(video_path, &dest)?;
+    generate_thumbnail(path, &dest, kind)?;
     Ok(dest)
 }
 
@@ -51,7 +53,7 @@ fn ensure_thumbnail_in(cache_dir: &Path, video_path: &str) -> anyhow::Result<Pat
 /// against the installed mpv (0.41.0):
 /// `mpv --vo=image --vo-image-outdir=<dir> --vo-image-format=png --frames=1
 /// --start=1 --ao=null <file>` writes `<dir>/00000001.png`.
-fn generate_thumbnail(video_path: &str, dest: &Path) -> anyhow::Result<()> {
+fn generate_thumbnail(path: &str, dest: &Path, kind: WallpaperKind) -> anyhow::Result<()> {
     let work_dir = tempfile::tempdir()?;
     let outdir = work_dir.path().to_string_lossy().into_owned();
 
@@ -66,15 +68,20 @@ fn generate_thumbnail(video_path: &str, dest: &Path) -> anyhow::Result<()> {
         init.set_option("vo-image-outdir", outdir.as_str())?;
         init.set_option("vo-image-format", "png")?;
         init.set_option("frames", "1")?;
-        init.set_option("start", "1")?;
+        if kind == WallpaperKind::Video {
+            // Skip a video's black intro frame. A still image has no
+            // guaranteed second of content to seek into, so this is
+            // video-only.
+            init.set_option("start", "1")?;
+        }
         init.set_option("ao", "null")?;
         init.set_option("osc", "no")?;
         Ok(())
     })?;
-    mpv.command("loadfile", &[video_path, "replace"])?;
+    mpv.command("loadfile", &[path, "replace"])?;
 
     let produced = work_dir.path().join("00000001.png");
-    wait_for_stable_file(&produced, video_path)?;
+    wait_for_stable_file(&produced, path)?;
     // Not `std::fs::rename`: the mpv work dir (under `$TMPDIR`, often tmpfs)
     // and the thumbnail cache dir (`dirs::cache_dir()`) are not guaranteed
     // to be on the same filesystem, and `rename(2)` fails with `EXDEV`
@@ -140,12 +147,26 @@ mod tests {
         concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/sample.mp4").to_string()
     }
 
+    fn fixture_image_path() -> String {
+        concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/sample.png").to_string()
+    }
+
+    #[test]
+    fn generates_a_thumbnail_from_a_still_image() {
+        let cache_root = tempfile::tempdir().unwrap();
+        let path = fixture_image_path();
+
+        let thumb = ensure_thumbnail_in(cache_root.path(), &path, WallpaperKind::Image).unwrap();
+        assert!(thumb.exists());
+        assert!(std::fs::metadata(&thumb).unwrap().len() > 0);
+    }
+
     #[test]
     fn generates_and_caches_a_thumbnail() {
         let cache_root = tempfile::tempdir().unwrap();
         let path = fixture_path();
 
-        let thumb = ensure_thumbnail_in(cache_root.path(), &path).unwrap();
+        let thumb = ensure_thumbnail_in(cache_root.path(), &path, WallpaperKind::Video).unwrap();
         assert!(thumb.exists());
         assert!(thumb.starts_with(cache_root.path()));
 
@@ -153,7 +174,7 @@ mod tests {
         // checking the file's mtime doesn't change.
         let mtime_before = std::fs::metadata(&thumb).unwrap().modified().unwrap();
         std::thread::sleep(Duration::from_millis(20));
-        let thumb_again = ensure_thumbnail_in(cache_root.path(), &path).unwrap();
+        let thumb_again = ensure_thumbnail_in(cache_root.path(), &path, WallpaperKind::Video).unwrap();
         let mtime_after = std::fs::metadata(&thumb_again).unwrap().modified().unwrap();
         assert_eq!(thumb, thumb_again);
         assert_eq!(mtime_before, mtime_after, "second call should not have regenerated the file");
@@ -171,7 +192,7 @@ mod tests {
         // same tmpfs a bare `tempfile::tempdir()` would.
         let cache_root = tempfile::Builder::new().tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
 
-        let thumb = ensure_thumbnail_in(cache_root.path(), &fixture_path()).unwrap();
+        let thumb = ensure_thumbnail_in(cache_root.path(), &fixture_path(), WallpaperKind::Video).unwrap();
         assert!(thumb.exists());
         assert!(thumb.starts_with(cache_root.path()));
     }
@@ -194,7 +215,7 @@ mod tests {
         let cache_root = tempfile::tempdir().unwrap();
 
         unsafe { libc::setlocale(libc::LC_NUMERIC, c"en_US.UTF-8".as_ptr()) };
-        let thumb = ensure_thumbnail_in(cache_root.path(), &fixture_path()).unwrap();
+        let thumb = ensure_thumbnail_in(cache_root.path(), &fixture_path(), WallpaperKind::Video).unwrap();
         assert!(thumb.exists());
 
         // Restore, so this test doesn't leak process-global locale state

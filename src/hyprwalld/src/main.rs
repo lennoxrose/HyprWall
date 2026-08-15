@@ -13,10 +13,18 @@ use std::os::unix::net::UnixStream;
 use calloop::generic::Generic;
 use calloop::{EventLoop, Interest, LoopHandle, Mode, PostAction};
 use calloop_wayland_source::WaylandSource;
+use clap::Parser;
 
 use app::AppState;
 use render::RenderResources;
 use wayland::connection::{AppData, WaylandBackend};
+
+/// Takes no runtime arguments today -- this exists so `--help`/`--version`
+/// are handled properly (and an unrecognized flag is a clear error) instead
+/// of silently being ignored and the daemon starting anyway.
+#[derive(Parser)]
+#[command(version, about = "HyprWall daemon: plays local video/image wallpapers as a Wayland layer-shell background")]
+struct Cli;
 
 /// Everything the single-threaded Wayland/IPC/render event loop shares.
 /// This *is* calloop's `Data` type parameter, so every inserted source's
@@ -36,6 +44,8 @@ struct Daemon {
 }
 
 fn main() -> anyhow::Result<()> {
+    Cli::parse();
+
     // libmpv refuses to initialize outside the "C" locale for LC_NUMERIC
     // (it parses numbers like frame timestamps with the C library's
     // locale-sensitive functions internally); the desktop's LANG/LC_*

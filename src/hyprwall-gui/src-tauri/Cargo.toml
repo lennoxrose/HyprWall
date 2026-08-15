@@ -8,6 +8,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 anyhow = "1.0.104"
+clap = { version = "4.6.6", features = ["derive"] }
 dirs = "6.0.0"
 hyprwall-config = { version = "0.1.0", path = "../../hyprwall-config" }
 hyprwall-ipc = { version = "0.1.0", path = "../../hyprwall-ipc" }

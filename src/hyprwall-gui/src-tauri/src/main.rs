@@ -1,6 +1,17 @@
 mod commands;
 
+use clap::Parser;
+
+/// Takes no runtime arguments today -- this exists so `--help`/`--version`
+/// are handled properly (and an unrecognized flag is a clear error) instead
+/// of silently being ignored and the GUI launching anyway.
+#[derive(Parser)]
+#[command(version, about = "HyprWall: browse and assign local video/image wallpapers")]
+struct Cli;
+
 fn main() {
+    Cli::parse();
+
     // libmpv (used for thumbnail generation) refuses to initialize outside
     // the "C" locale for LC_NUMERIC; a normal desktop LANG/LC_* like
     // en_US.UTF-8 is enough to trip this. Only LC_NUMERIC is touched.

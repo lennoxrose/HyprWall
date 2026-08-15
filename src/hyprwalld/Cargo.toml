@@ -9,8 +9,8 @@ calloop = "0.14.4"
 calloop-wayland-source = "0.4.1"
 clap = { version = "4.6.6", features = ["derive"] }
 glow = "0.18.0"
-hyprwall-config = { version = "0.1.0", path = "../hyprwall-config" }
-hyprwall-ipc = { version = "0.1.0", path = "../hyprwall-ipc" }
+hyprwall-config = { path = "../hyprwall-config" }
+hyprwall-ipc = { path = "../hyprwall-ipc" }
 khronos-egl = { version = "6.0.0", features = ["dynamic"] }
 libc = "0.2"
 libmpv2 = { version = "6.0.0", features = ["render"] }

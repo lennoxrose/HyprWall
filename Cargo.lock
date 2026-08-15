@@ -1551,7 +1551,7 @@ dependencies = [
 
 [[package]]
 name = "hyprwall-config"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "dirs",
@@ -1562,7 +1562,7 @@ dependencies = [
 
 [[package]]
 name = "hyprwall-gui"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1583,7 +1583,7 @@ dependencies = [
 
 [[package]]
 name = "hyprwall-ipc"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "hyprwall-config",
  "tempfile",
@@ -1591,7 +1591,7 @@ dependencies = [
 
 [[package]]
 name = "hyprwallctl"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "clap",
  "hyprwall-ipc",
@@ -1600,7 +1600,7 @@ dependencies = [
 
 [[package]]
 name = "hyprwalld"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "calloop",

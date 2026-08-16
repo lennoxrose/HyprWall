@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { NERD_FONT, TITLEBAR_BLUE } from "./TitleBar";
 import { CreditsPanel } from "./CreditsPanel";
+import { StyleSettings } from "./StyleSettings";
 import {
   getBackgroundServiceEnabled,
   getStartOnLoginEnabled,
   setBackgroundServiceEnabled,
   setStartOnLoginEnabled,
 } from "../lib/api";
+import type { ThemeColors, ThemeMode, ThemeState } from "../lib/types";
 
 interface Props {
   open: boolean;
@@ -14,6 +16,10 @@ interface Props {
   libraryFolders: string[];
   onAddLibraryFolder: (path: string) => void;
   onRemoveLibraryFolder: (path: string) => void;
+  theme: ThemeState;
+  onSetThemeMode: (mode: ThemeMode) => void;
+  onSetThemeColor: (key: keyof ThemeColors, value: string) => void;
+  onResetTheme: () => void;
 }
 
 interface Category {
@@ -24,10 +30,11 @@ interface Category {
 const CATEGORIES: Category[] = [
   { id: "system", label: "System" },
   { id: "startup", label: "Startup" },
+  { id: "style", label: "Style" },
   { id: "credits", label: "Credits" },
 ];
 
-const BORDER = "1px solid #333";
+const BORDER = "1px solid var(--hw-border)";
 
 /** A labeled on/off pill, used for every systemd-backed toggle on the
  * Startup tab -- green "Enabled" when on, matching the app's selected-state
@@ -47,7 +54,7 @@ function ToggleRow({
   return (
     <div style={{ marginTop: 6 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: 5 }}>
-        <span style={{ fontSize: 13, fontWeight: 500, color: "#bbb" }}>{label}</span>
+        <span style={{ fontSize: 13, fontWeight: 500, color: "var(--hw-text-muted)" }}>{label}</span>
         <button
           onClick={onToggle}
           disabled={enabled === null}
@@ -58,15 +65,15 @@ function ToggleRow({
             fontSize: 12,
             fontWeight: 600,
             cursor: enabled === null ? "default" : "pointer",
-            background: enabled ? "#4ade80" : "#3a3a3a",
-            color: enabled ? "#0a0a0a" : "#ccc",
+            background: enabled ? "var(--hw-success)" : "var(--hw-bg-elevated)",
+            color: enabled ? "var(--hw-bg)" : "var(--hw-text-muted)",
           }}
         >
           {enabled === null ? "..." : enabled ? "Enabled" : "Disabled"}
         </button>
       </div>
       {error && (
-        <p style={{ color: "#f87171", fontSize: 12, margin: "4px 0 0" }} role="alert">
+        <p style={{ color: "var(--hw-danger)", fontSize: 12, margin: "4px 0 0" }} role="alert">
           {error}
         </p>
       )}
@@ -80,6 +87,10 @@ export function SettingsModal({
   libraryFolders,
   onAddLibraryFolder,
   onRemoveLibraryFolder,
+  theme,
+  onSetThemeMode,
+  onSetThemeColor,
+  onResetTheme,
 }: Props) {
   const [category, setCategory] = useState(CATEGORIES[0].id);
   const [newFolder, setNewFolder] = useState("");
@@ -154,13 +165,12 @@ export function SettingsModal({
         style={{
           width: "70%",
           height: "70%",
-          background: "#0a0a0a",
+          background: "var(--hw-bg)",
           border: BORDER,
           borderRadius: 12,
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
         }}
       >
         <div
@@ -170,14 +180,20 @@ export function SettingsModal({
             justifyContent: "space-between",
             padding: "10px 14px",
             fontFamily: NERD_FONT,
-            color: "#fff",
+            color: "var(--hw-text)",
           }}
         >
           <span style={{ fontWeight: 700, fontSize: 16 }}>Settings</span>
           <button
             onClick={onClose}
             aria-label="Close settings"
-            style={{ background: "transparent", border: "none", color: "#999", fontSize: 16, cursor: "pointer" }}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "var(--hw-text-muted)",
+              fontSize: 16,
+              cursor: "pointer",
+            }}
           >
             ×
           </button>
@@ -192,7 +208,7 @@ export function SettingsModal({
                 background: "transparent",
                 border: "none",
                 borderBottom: `2px solid ${category === cat.id ? TITLEBAR_BLUE : "transparent"}`,
-                color: category === cat.id ? "#fff" : "#555",
+                color: category === cat.id ? "var(--hw-text)" : "var(--hw-text-muted)",
                 padding: "8px 4px",
                 marginBottom: -1,
                 fontSize: 13,
@@ -205,10 +221,10 @@ export function SettingsModal({
           ))}
         </div>
 
-        <div style={{ flex: 1, padding: 16, color: "#eee", overflow: "auto" }}>
+        <div style={{ flex: 1, padding: 16, color: "var(--hw-text)", overflow: "auto" }}>
           {category === "system" && (
             <div style={{ padding: 5 }}>
-              <div style={{ fontSize: 13, fontWeight: 500, color: "#bbb", marginBottom: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: "var(--hw-text-muted)", marginBottom: 8 }}>
                 Media Library Folders
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
@@ -220,7 +236,7 @@ export function SettingsModal({
                       alignItems: "center",
                       justifyContent: "space-between",
                       gap: 8,
-                      border: "1px solid #333",
+                      border: "1px solid var(--hw-border)",
                       borderRadius: 4,
                       padding: "5px 8px",
                     }}
@@ -228,7 +244,7 @@ export function SettingsModal({
                     <span
                       style={{
                         fontSize: 12,
-                        color: "#ccc",
+                        color: "var(--hw-text-muted)",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
@@ -239,7 +255,13 @@ export function SettingsModal({
                     <button
                       onClick={() => onRemoveLibraryFolder(folder)}
                       aria-label={`Remove ${folder}`}
-                      style={{ background: "transparent", border: "none", color: "#999", fontSize: 14, cursor: "pointer" }}
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        color: "var(--hw-text-muted)",
+                        fontSize: 14,
+                        cursor: "pointer",
+                      }}
                     >
                       ×
                     </button>
@@ -266,8 +288,8 @@ export function SettingsModal({
                     fontSize: 12,
                     fontWeight: 600,
                     cursor: "pointer",
-                    background: "#4ade80",
-                    color: "#0a0a0a",
+                    background: "var(--hw-success)",
+                    color: "var(--hw-bg)",
                   }}
                 >
                   Add
@@ -291,6 +313,15 @@ export function SettingsModal({
                 error={startOnLoginError}
               />
             </>
+          )}
+
+          {category === "style" && (
+            <StyleSettings
+              theme={theme}
+              onSetMode={onSetThemeMode}
+              onSetColor={onSetThemeColor}
+              onReset={onResetTheme}
+            />
           )}
 
           {category === "credits" && <CreditsPanel />}

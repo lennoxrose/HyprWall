@@ -1,6 +1,6 @@
 import { CenteredMessage } from "./CenteredMessage";
 
-const COLOR = "#555";
+const COLOR = "var(--hw-text-muted)";
 
 /** Plain line-drawing frown, matching the app's other custom SVG icons
  * (cog, chevrons) rather than a colorful emoji -- a colored emoji glyph

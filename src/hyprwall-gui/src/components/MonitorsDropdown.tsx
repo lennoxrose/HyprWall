@@ -21,23 +21,26 @@ const TOOLBAR_BUTTON_STYLE: CSSProperties = {
   border: "none",
   borderRadius: 6,
   background: "#4b5563",
-  color: "#fff",
+  color: "var(--hw-accent-text)",
   fontSize: 12,
   padding: "6px 10px",
   cursor: "pointer",
 };
 
-const PAGE_BG = "#0a0a0a";
 const NOTCH = 14;
 const PANEL_RADIUS = 14;
 
 /** A quarter-circle "fillet" so the navbar's straight bottom edge curves
  * smoothly into the dropdown's straight side edge instead of meeting it at
  * a sharp right angle. `corner` is the notch's own outer corner (the point
- * *away* from both the navbar and the dropdown) -- that's where the page
- * background shows through; the rest of the box is titlebar blue. A real
- * child of the sliding panel (not an independently faded overlay), so it
- * physically travels with the slide instead of fading in place. */
+ * *away* from both the navbar and the dropdown). Uses `transparent`, not a
+ * hardcoded page-background color -- an earlier version blended into a
+ * fixed hex assumed to match the page, which broke as soon as the page
+ * background became themeable (rendered as a solid square in light mode
+ * instead of a curve). Transparent always reveals whatever's actually
+ * behind it, correct in any theme. A real child of the sliding panel (not
+ * an independently faded overlay), so it physically travels with the slide
+ * instead of fading in place. */
 function CornerNotch({ side }: { side: "left" | "right" }) {
   const corner = side === "left" ? "bottom left" : "bottom right";
   return (
@@ -48,7 +51,7 @@ function CornerNotch({ side }: { side: "left" | "right" }) {
         [side]: -NOTCH,
         width: NOTCH,
         height: NOTCH,
-        background: `radial-gradient(circle at ${corner}, ${PAGE_BG} ${NOTCH}px, ${TITLEBAR_BLUE} ${NOTCH}px)`,
+        background: `radial-gradient(circle at ${corner}, transparent ${NOTCH}px, ${TITLEBAR_BLUE} ${NOTCH}px)`,
       }}
     />
   );
@@ -128,7 +131,6 @@ export function MonitorsDropdown({
             background: TITLEBAR_BLUE,
             borderBottomLeftRadius: PANEL_RADIUS,
             borderBottomRightRadius: PANEL_RADIUS,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
             padding: 14,
           }}
         >
@@ -146,14 +148,14 @@ export function MonitorsDropdown({
                 >
                   <button
                     onClick={onConfirmGroupSelection}
-                    style={{ flex: 1, border: "none", background: "transparent", color: "#fff", fontSize: 12, padding: "6px 10px", cursor: "pointer" }}
+                    style={{ flex: 1, border: "none", background: "transparent", color: "var(--hw-accent-text)", fontSize: 12, padding: "6px 10px", cursor: "pointer" }}
                   >
                     Confirm
                   </button>
                   <div style={{ width: 1, background: "rgba(255,255,255,0.3)" }} />
                   <button
                     onClick={onCancelGroupMode}
-                    style={{ flex: 1, border: "none", background: "transparent", color: "#fff", fontSize: 12, padding: "6px 10px", cursor: "pointer" }}
+                    style={{ flex: 1, border: "none", background: "transparent", color: "var(--hw-accent-text)", fontSize: 12, padding: "6px 10px", cursor: "pointer" }}
                   >
                     Cancel
                   </button>

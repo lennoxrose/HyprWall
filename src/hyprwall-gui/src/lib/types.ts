@@ -14,6 +14,28 @@ export interface WallpaperEntry {
   path: string;
   thumbnail_path: string | null;
   kind: WallpaperKind;
+  dominant_color: string | null;
+  added_ts: number | null;
+}
+
+export type ThemeMode = "dark" | "light";
+
+export interface ThemeColors {
+  bg: string;
+  bgElevated: string;
+  border: string;
+  borderHover: string;
+  text: string;
+  textMuted: string;
+  accent: string;
+  accentText: string;
+  success: string;
+  danger: string;
+}
+
+export interface ThemeState {
+  mode: ThemeMode;
+  colors: ThemeColors;
 }
 
 export type FitMode = "cover" | "contain" | "stretch";

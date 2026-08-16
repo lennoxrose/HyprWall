@@ -1,6 +1,6 @@
 import { CenteredMessage } from "./CenteredMessage";
 
-const COLOR = "#555";
+const COLOR = "var(--hw-text-muted)";
 
 function WarningTriangleIcon() {
   return (

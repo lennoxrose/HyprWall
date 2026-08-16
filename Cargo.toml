@@ -10,4 +10,4 @@ members = ["src/hyprwall-config", "src/hyprwall-gui/src-tauri", "src/hyprwall-ip
 # job) rather than generated from it, since npm has no workspace-version
 # inheritance of its own.
 [workspace.package]
-version = "1.0.0"
+version = "1.1.0"

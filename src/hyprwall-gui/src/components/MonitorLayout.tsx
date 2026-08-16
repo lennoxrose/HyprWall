@@ -251,12 +251,28 @@ export function MonitorLayout({ monitors, selected, onToggle, open }: Props) {
               borderTopRightRadius: box.borderTopRightRadius,
               borderBottomLeftRadius: box.borderBottomLeftRadius,
               borderBottomRightRadius: box.borderBottomRightRadius,
-              borderTop: box.mergedTop ? "none" : selected.has(m.name) ? "2px solid #4ade80" : "1px solid #555",
-              borderBottom: box.mergedBottom ? "none" : selected.has(m.name) ? "2px solid #4ade80" : "1px solid #555",
-              borderLeft: box.mergedLeft ? "none" : selected.has(m.name) ? "2px solid #4ade80" : "1px solid #555",
-              borderRight: box.mergedRight ? "none" : selected.has(m.name) ? "2px solid #4ade80" : "1px solid #555",
-              background: "#3a3a3a",
-              color: "#eee",
+              borderTop: box.mergedTop
+                ? "none"
+                : selected.has(m.name)
+                  ? "2px solid var(--hw-success)"
+                  : "1px solid var(--hw-border-hover)",
+              borderBottom: box.mergedBottom
+                ? "none"
+                : selected.has(m.name)
+                  ? "2px solid var(--hw-success)"
+                  : "1px solid var(--hw-border-hover)",
+              borderLeft: box.mergedLeft
+                ? "none"
+                : selected.has(m.name)
+                  ? "2px solid var(--hw-success)"
+                  : "1px solid var(--hw-border-hover)",
+              borderRight: box.mergedRight
+                ? "none"
+                : selected.has(m.name)
+                  ? "2px solid var(--hw-success)"
+                  : "1px solid var(--hw-border-hover)",
+              background: "var(--hw-bg-elevated)",
+              color: "var(--hw-text)",
               fontSize: 12,
               cursor: "pointer",
               overflow: "hidden",

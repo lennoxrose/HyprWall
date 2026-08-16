@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { MonitorState, WallpaperEntry, WallpaperSettings } from "./types";
+import type { MonitorState, ThemeState, WallpaperEntry, WallpaperSettings } from "./types";
 
 export class DaemonUnreachableError extends Error {}
 
@@ -54,3 +54,7 @@ export const setWallpaperSettings = (path: string, settings: WallpaperSettings) 
   call<void>("set_wallpaper_settings", { path, settings });
 
 export const hasAudioTrack = (path: string) => call<boolean>("has_audio_track", { path });
+
+export const getTheme = () => call<ThemeState>("get_theme");
+
+export const setTheme = (theme: ThemeState) => call<void>("set_theme", { theme });

@@ -1,5 +1,11 @@
+import { version as APP_VERSION } from "../../package.json";
+
 export const TITLEBAR_HEIGHT = 30;
-export const TITLEBAR_BLUE = "#2563eb";
+// A `var()` reference, not a literal -- every consumer of this constant
+// (MonitorsDropdown's corner notch gradient, SettingsModal's active-tab
+// underline) recolors automatically when the Style tab changes the accent
+// token, with no per-consumer plumbing.
+export const TITLEBAR_BLUE = "var(--hw-accent)";
 export const NERD_FONT = '"JetBrainsMono Nerd Font", "JetBrains Mono", monospace';
 /** Shared pace for every Monitors-dropdown-related animation (panel slide,
  * corner notch fade, chevron rotation) -- opening and closing both use this
@@ -57,7 +63,7 @@ export function TitleBar({ monitorsOpen, onToggleMonitors, onOpenSettings }: Pro
         alignItems: "center",
         height: TITLEBAR_HEIGHT,
         background: TITLEBAR_BLUE,
-        color: "#fff",
+        color: "var(--hw-accent-text)",
         fontFamily: NERD_FONT,
         fontSize: 13,
         userSelect: "none",
@@ -66,7 +72,7 @@ export function TitleBar({ monitorsOpen, onToggleMonitors, onOpenSettings }: Pro
     >
       <div style={{ display: "flex", alignItems: "baseline", gap: 7, paddingLeft: 10 }}>
         <span style={{ fontWeight: 700, letterSpacing: 0.3 }}>HyprWall</span>
-        <span style={{ color: "rgba(255,255,255,0.6)", fontWeight: 400, fontSize: 12 }}>| v0.1.0</span>
+        <span style={{ color: "rgba(255,255,255,0.6)", fontWeight: 400, fontSize: 12 }}>| v{APP_VERSION}</span>
       </div>
 
       <button
@@ -83,7 +89,7 @@ export function TitleBar({ monitorsOpen, onToggleMonitors, onOpenSettings }: Pro
           border: "none",
           borderRadius: 6,
           background: monitorsOpen ? "rgba(255,255,255,0.14)" : "transparent",
-          color: "#fff",
+          color: "var(--hw-accent-text)",
           fontFamily: NERD_FONT,
           fontSize: 13,
           fontWeight: 600,
@@ -107,7 +113,7 @@ export function TitleBar({ monitorsOpen, onToggleMonitors, onOpenSettings }: Pro
           padding: "0 10px",
           border: "none",
           background: "transparent",
-          color: "#fff",
+          color: "var(--hw-accent-text)",
           cursor: "pointer",
         }}
       >

@@ -65,7 +65,7 @@ function Slider({
             min={min}
             max={max}
             step={step}
-            style={{ width: 64, padding: "2px 6px", fontSize: 11, border: "1px solid #fff", textAlign: "right" }}
+            style={{ width: 64, padding: "2px 6px", fontSize: 11, border: "1px solid var(--hw-accent-text)", textAlign: "right" }}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commit}
             onKeyDown={(e) => {
@@ -93,14 +93,14 @@ function Slider({
 
 /** Right-side settings panel for one picture's zoom/pan/fit/color/volume,
  * opened by right-clicking a selected library tile. Visually reuses
- * `MonitorsDropdown`'s language (blue chrome, the same slide timing/easing,
- * a boxShadow'd panel) but slides in from the window's right edge instead
- * of down from the titlebar, and is only rounded on the left edge (the one
- * facing into the app) -- the right edge is flush against the window
- * boundary, same as the window itself, so rounding it would look like the
- * panel is "leaping up" off the edge instead of belonging to it. No
- * `CornerNotch` either: that piece fillets the titlebar-to-dropdown seam
- * specifically, which doesn't exist here. */
+ * `MonitorsDropdown`'s language (blue chrome, the same slide timing/easing)
+ * but slides in from the window's right edge instead of down from the
+ * titlebar, and is only rounded on the left edge (the one facing into the
+ * app) -- the right edge is flush against the window boundary, same as the
+ * window itself, so rounding it would look like the panel is "leaping up"
+ * off the edge instead of belonging to it. No `CornerNotch` either: that
+ * piece fillets the titlebar-to-dropdown seam specifically, which doesn't
+ * exist here. */
 export function Sidebar({ path, kind, onClose }: Props) {
   const [settings, setSettings] = useState<WallpaperSettings>(DEFAULT_SETTINGS);
   const [showVolume, setShowVolume] = useState(false);
@@ -155,7 +155,6 @@ export function Sidebar({ path, kind, onClose }: Props) {
           background: TITLEBAR_BLUE,
           borderTopLeftRadius: PANEL_RADIUS,
           borderBottomLeftRadius: PANEL_RADIUS,
-          boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
           padding: "22px 14px",
           display: "flex",
           flexDirection: "column",
@@ -165,11 +164,11 @@ export function Sidebar({ path, kind, onClose }: Props) {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <span style={{ fontWeight: 700, fontSize: 14, color: "#fff" }}>Picture Settings</span>
+          <span style={{ fontWeight: 700, fontSize: 14, color: "var(--hw-accent-text)" }}>Picture Settings</span>
           <button
             onClick={onClose}
             aria-label="Close picture settings"
-            style={{ background: "transparent", border: "none", color: "#fff", fontSize: 16, cursor: "pointer" }}
+            style={{ background: "transparent", border: "none", color: "var(--hw-accent-text)", fontSize: 16, cursor: "pointer" }}
           >
             ×
           </button>
@@ -194,8 +193,8 @@ export function Sidebar({ path, kind, onClose }: Props) {
                   fontSize: 11,
                   fontWeight: 600,
                   cursor: "pointer",
-                  background: settings.fit === f ? "#4ade80" : "rgba(255,255,255,0.14)",
-                  color: settings.fit === f ? "#0a0a0a" : "#fff",
+                  background: settings.fit === f ? "var(--hw-success)" : "rgba(255,255,255,0.14)",
+                  color: settings.fit === f ? "var(--hw-bg)" : "var(--hw-accent-text)",
                   textTransform: "capitalize",
                 }}
               >

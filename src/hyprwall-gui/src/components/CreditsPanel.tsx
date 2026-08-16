@@ -48,7 +48,7 @@ function writeCache(owner: GitHubUser, contributors: GitHubUser[]) {
 
 const AVATAR_STYLE = {
   borderRadius: "50%",
-  border: "1px solid #333",
+  border: "1px solid var(--hw-border)",
 };
 
 /** Thin-stroke external-link glyph, matching the app's other custom SVG
@@ -76,7 +76,7 @@ function ContributeLink() {
         border: "none",
         padding: 0,
         fontSize: 11,
-        color: "#777",
+        color: "var(--hw-text-muted)",
         cursor: "pointer",
       }}
     >
@@ -140,12 +140,12 @@ export function CreditsPanel() {
   }, []);
 
   if (loading) {
-    return <p style={{ fontSize: 13, color: "#888" }}>loading credits...</p>;
+    return <p style={{ fontSize: 13, color: "var(--hw-text-muted)" }}>loading credits...</p>;
   }
 
   if (error) {
     return (
-      <p style={{ fontSize: 13, color: "#f87171" }} role="alert">
+      <p style={{ fontSize: 13, color: "var(--hw-danger)" }} role="alert">
         couldn't reach GitHub to load credits: {error}
       </p>
     );
@@ -159,8 +159,8 @@ export function CreditsPanel() {
       {owner && (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
           <img src={owner.avatar_url} alt={owner.login} style={{ ...AVATAR_STYLE, width: 72, height: 72 }} />
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>{owner.login}</div>
-          <div style={{ fontSize: 11, color: "#666" }}>Creator of HyprWall</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--hw-text)" }}>{owner.login}</div>
+          <div style={{ fontSize: 11, color: "var(--hw-text-muted)" }}>Creator of HyprWall</div>
         </div>
       )}
 
@@ -169,14 +169,14 @@ export function CreditsPanel() {
           style={{
             fontSize: 12,
             fontWeight: 600,
-            color: "#888",
+            color: "var(--hw-text-muted)",
             marginBottom: 8,
             textTransform: "uppercase",
             letterSpacing: 0.5,
             textAlign: "center",
           }}
         >
-          Thanks to everyone who's contributed
+          Big thanks to everyone who's contributed
         </div>
 
         {hasContributors ? (
@@ -191,7 +191,7 @@ export function CreditsPanel() {
                 <span
                   style={{
                     fontSize: 10,
-                    color: "#ccc",
+                    color: "var(--hw-text-muted)",
                     textAlign: "center",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -205,7 +205,7 @@ export function CreditsPanel() {
             ))}
           </div>
         ) : (
-          <p style={{ fontSize: 12, color: "#666", margin: 0, textAlign: "center" }}>Sadly no Contributors here yet</p>
+          <p style={{ fontSize: 12, color: "var(--hw-text-muted)", margin: 0, textAlign: "center" }}>Sadly no Contributors here yet</p>
         )}
       </div>
 

@@ -3,21 +3,21 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { ErrorState } from "./ErrorState";
 import type { WallpaperEntry, WallpaperKind } from "../lib/types";
 
-const MUTED = "#555";
+const MUTED = "var(--hw-text-muted)";
 const RADIUS = 8; // matches MonitorLayout's monitor-tile RADIUS
-const BORDER_REST = "1px solid #333"; // matches SettingsModal's BORDER
-const BORDER_HOVER = "1px solid #555"; // matches MonitorLayout's unselected-tile border
-const BORDER_SELECTED = "2px solid #4ade80"; // matches MonitorLayout's selected-tile border
-const TRANSITION = "border-color 150ms cubic-bezier(0.4, 0, 0.2, 1), transform 150ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1)";
+const BORDER_REST = "1px solid var(--hw-border)"; // matches SettingsModal's BORDER
+const BORDER_HOVER = "1px solid var(--hw-border-hover)"; // matches MonitorLayout's unselected-tile border
+const BORDER_SELECTED = "2px solid var(--hw-success)"; // matches MonitorLayout's selected-tile border
+const TRANSITION = "border-color 150ms cubic-bezier(0.4, 0, 0.2, 1), transform 150ms cubic-bezier(0.4, 0, 0.2, 1)";
 
 /** A small play-triangle-in-a-frame, distinguishing video entries from
  * stills at a glance -- same thin-stroke line style as the app's other
  * custom icons (cog, chevron, warning triangle). */
 function VideoKindIcon() {
   return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.8">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--hw-text-muted)" strokeWidth="1.8">
       <rect x="2" y="4" width="20" height="16" rx="2" />
-      <path d="M10 8.5 L16 12 L10 15.5 Z" fill="#ccc" stroke="none" />
+      <path d="M10 8.5 L16 12 L10 15.5 Z" fill="var(--hw-text-muted)" stroke="none" />
     </svg>
   );
 }
@@ -25,9 +25,9 @@ function VideoKindIcon() {
 /** A small mountain-and-sun picture glyph for still/animated image entries. */
 function ImageKindIcon() {
   return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.8">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--hw-text-muted)" strokeWidth="1.8">
       <rect x="2" y="4" width="20" height="16" rx="2" />
-      <circle cx="8" cy="9.5" r="1.4" fill="#ccc" stroke="none" />
+      <circle cx="8" cy="9.5" r="1.4" fill="var(--hw-text-muted)" stroke="none" />
       <path d="M2 17 L9 11 L14 15 L18 11.5 L22 15.5" strokeLinejoin="round" strokeLinecap="round" />
     </svg>
   );
@@ -66,7 +66,7 @@ function KindBadge({ kind }: { kind: WallpaperKind }) {
         // rendering some badges as a stray solid/smeared color block
         // instead of the icon. A plain opaque background has none of that
         // risk.
-        background: "#0a0a0a",
+        background: "var(--hw-bg)",
       }}
     >
       {kind === "video" ? <VideoKindIcon /> : <ImageKindIcon />}
@@ -110,10 +110,9 @@ export function LibraryGrid({ wallpapers, selected, onSelect, onOpenSettings }: 
               borderRadius: RADIUS,
               padding: 0,
               overflow: "hidden",
-              background: "#141414",
+              background: "var(--hw-bg-elevated)",
               cursor: "pointer",
               transform: isHovered && !isSelected ? "translateY(-2px)" : "none",
-              boxShadow: isHovered && !isSelected ? "0 6px 16px rgba(0,0,0,0.5)" : "0 1px 3px rgba(0,0,0,0.4)",
               transition: TRANSITION,
             }}
           >
@@ -146,7 +145,7 @@ export function LibraryGrid({ wallpapers, selected, onSelect, onOpenSettings }: 
             <div
               style={{
                 fontSize: 10,
-                color: "#ccc",
+                color: "var(--hw-text-muted)",
                 padding: "5px 6px",
                 overflow: "hidden",
                 textOverflow: "ellipsis",

@@ -1,8 +1,9 @@
 use std::path::Path;
+use std::time::UNIX_EPOCH;
 
 use serde::Serialize;
 
-use crate::commands::thumbnails;
+use crate::commands::{color, thumbnails};
 
 const VIDEO_EXTENSIONS: &[&str] = &["mp4", "webm", "mkv"];
 const IMAGE_EXTENSIONS: &[&str] = &[
@@ -22,6 +23,8 @@ pub struct WallpaperEntry {
     pub path: String,
     pub thumbnail_path: Option<String>,
     pub kind: WallpaperKind,
+    pub dominant_color: Option<String>,
+    pub added_ts: Option<i64>,
 }
 
 #[tauri::command]
@@ -46,10 +49,21 @@ pub fn scan_library(folders: Vec<String>) -> Vec<WallpaperEntry> {
                     None
                 }
             };
+            let dominant_color = thumbnail_path
+                .as_deref()
+                .and_then(|p| color::dominant_color(Path::new(p)));
+            let added_ts = entry
+                .metadata()
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                .map(|d| d.as_secs() as i64);
             entries.push(WallpaperEntry {
                 path: path_str.to_string(),
                 thumbnail_path,
                 kind,
+                dominant_color,
+                added_ts,
             });
         }
     }

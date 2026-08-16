@@ -4,10 +4,14 @@ import { TitleBar } from "./components/TitleBar";
 import { MonitorsDropdown } from "./components/MonitorsDropdown";
 import { SettingsModal } from "./components/SettingsModal";
 import { LibraryGrid } from "./components/LibraryGrid";
+import { SearchBar } from "./components/SearchBar";
+import { FilterIcon, FilterPanel, emptyFilterState, isFilterActive, type FilterState } from "./components/FilterPanel";
+import { dateBucket, nearestColorBucket } from "./lib/colorBuckets";
 import { Sidebar } from "./components/Sidebar";
 import { EmptyLibraryState } from "./components/EmptyLibraryState";
 import { ErrorState } from "./components/ErrorState";
 import { useSelection } from "./state/selection";
+import { useTheme } from "./state/theme";
 import {
   DaemonUnreachableError,
   getLibraryFolders,
@@ -30,6 +34,10 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [groupMode, setGroupMode] = useState(false);
   const [settingsSidebarPath, setSettingsSidebarPath] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filters, setFilters] = useState<FilterState>(emptyFilterState());
+  const [filterOpen, setFilterOpen] = useState(false);
+  const { theme, setMode, setColor, resetToDefaults } = useTheme();
 
   // Right-clicking the picture the sidebar is already open for closes it
   // again -- the same tile is both the open and the close affordance.
@@ -180,6 +188,28 @@ export default function App() {
       for (const name of names) await unsetWallpaper(name);
     });
 
+  const filteredWallpapers = wallpapers.filter((w) => {
+    if (!(w.path.split("/").pop() ?? "").toLowerCase().includes(searchQuery.trim().toLowerCase())) return false;
+    if (filters.kinds.size > 0 && !filters.kinds.has(w.kind)) return false;
+    if (filters.colors.size > 0 && (!w.dominant_color || !filters.colors.has(nearestColorBucket(w.dominant_color))))
+      return false;
+    if (filters.dateBucket !== null && (w.added_ts === null || dateBucket(w.added_ts) !== filters.dateBucket))
+      return false;
+    return true;
+  });
+
+  // Distinguishes *why* the grid is empty -- a genuinely empty library reads
+  // very differently from "your search/filters excluded everything", and
+  // conflating them produced a broken-looking `no wallpapers match "".`
+  // when a filter (not the search box) was what excluded every entry.
+  const emptyResultsMessage = () => {
+    if (wallpapers.length === 0) return "no wallpaper files were found in the configured library folders.";
+    const reasons: string[] = [];
+    if (searchQuery.trim()) reasons.push(`"${searchQuery.trim()}"`);
+    if (isFilterActive(filters)) reasons.push("the selected filters");
+    return reasons.length > 0 ? `no wallpapers match ${reasons.join(" and ")}.` : "no wallpapers match.";
+  };
+
   return (
     <div
       style={{
@@ -189,8 +219,8 @@ export default function App() {
         height: "100vh",
         overflow: "hidden",
         fontFamily: "sans-serif",
-        color: "#eee",
-        background: "#0a0a0a",
+        color: "var(--hw-text)",
+        background: "var(--hw-bg)",
       }}
     >
       <TitleBar
@@ -204,6 +234,10 @@ export default function App() {
         libraryFolders={folders}
         onAddLibraryFolder={addLibraryFolder}
         onRemoveLibraryFolder={removeLibraryFolder}
+        theme={theme}
+        onSetThemeMode={setMode}
+        onSetThemeColor={setColor}
+        onResetTheme={resetToDefaults}
       />
       <MonitorsDropdown
         open={monitorsOpen}
@@ -232,7 +266,7 @@ export default function App() {
         ) : (
           <>
             {actionError && (
-              <p style={{ color: "#f87171", fontSize: 13 }} role="alert">
+              <p style={{ color: "var(--hw-danger)", fontSize: 13 }} role="alert">
                 {actionError}
               </p>
             )}
@@ -240,12 +274,52 @@ export default function App() {
             {folders.length === 0 ? (
               <EmptyLibraryState />
             ) : (
-              <LibraryGrid
-                wallpapers={wallpapers}
-                selected={selectedWallpaper}
-                onSelect={selectWallpaper}
-                onOpenSettings={toggleSettingsSidebar}
-              />
+              <>
+                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                  <SearchBar value={searchQuery} onChange={setSearchQuery} />
+                  <div style={{ position: "relative", flex: 0.5 }}>
+                    <button
+                      onClick={() => setFilterOpen((o) => !o)}
+                      aria-expanded={filterOpen}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                        border: isFilterActive(filters)
+                          ? "1px solid var(--hw-success)"
+                          : "1px solid var(--hw-border)",
+                        borderRadius: 4,
+                        background: "transparent",
+                        color: isFilterActive(filters) ? "var(--hw-success)" : "var(--hw-text)",
+                        fontSize: 13,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <FilterIcon />
+                      Filter{isFilterActive(filters) ? ` (${filters.kinds.size + filters.colors.size + (filters.dateBucket ? 1 : 0)})` : ""}
+                    </button>
+                    <FilterPanel
+                      open={filterOpen}
+                      onClose={() => setFilterOpen(false)}
+                      filters={filters}
+                      onChange={setFilters}
+                    />
+                  </div>
+                </div>
+                {filteredWallpapers.length === 0 ? (
+                  <ErrorState message={emptyResultsMessage()} />
+                ) : (
+                  <LibraryGrid
+                    wallpapers={filteredWallpapers}
+                    selected={selectedWallpaper}
+                    onSelect={selectWallpaper}
+                    onOpenSettings={toggleSettingsSidebar}
+                  />
+                )}
+              </>
             )}
           </>
         )}

@@ -176,11 +176,44 @@ impl EglCore {
     /// Resolves a GL (or EGL) entry point by name, for handing to libmpv's
     /// render API. Returns null if the symbol is unavailable, which is what
     /// mpv's `get_proc_address` contract expects.
+    ///
+    /// `glFenceSync` resolves to `stub_gl_fence_sync` below instead of the
+    /// real driver entry point: mpv's render API is known to leak the GL
+    /// sync fence objects it creates for frame-timing, which pins the
+    /// decode buffer each fence references and prevents it from ever
+    /// returning to ffmpeg's frame pool. `mpvpaper` -- another
+    /// libmpv-render-API wallpaper tool -- carries the identical workaround
+    /// with the exact same rationale (its own comment: "resolve libmpv
+    /// memory/descriptor leaks by returning NULL"). Confirmed against this
+    /// codebase's own heaptrack capture: an unbounded, non-plateauing
+    /// `av_buffer_pool_get`/`avcodec_default_get_buffer2` leak traced
+    /// straight back to `mpv_render_context_render`, unaffected by hwdec,
+    /// demuxer cache limits, core-event draining, or `vd-lavc-dr=no`.
+    ///
+    /// The proc address itself must still resolve to a *real* function --
+    /// returning a null proc address instead (tried first) makes mpv treat
+    /// the extension as entirely unsupported and fail render-context
+    /// creation outright (`Raw(-18)`). Handing back a real function that
+    /// always returns a null `GLsync` is what actually reproduces
+    /// mpvpaper's fix: mpv still believes the call succeeded, just gets
+    /// "already signaled," so it never holds onto the fence (or the buffer
+    /// behind it).
     pub fn get_proc_address(&self, name: &str) -> *mut c_void {
+        if name == "glFenceSync" {
+            return stub_gl_fence_sync as *mut c_void;
+        }
         self.egl
             .get_proc_address(name)
             .map_or(std::ptr::null_mut(), |f| f as *mut c_void)
     }
+}
+
+/// Stands in for `glFenceSync` (`GLsync glFenceSync(GLenum condition,
+/// GLbitfield flags)`) -- see `EglCore::get_proc_address`'s doc comment.
+/// Always reports "already signaled" (a null `GLsync`) instead of creating a
+/// real fence, so mpv never holds a reference to one.
+extern "system" fn stub_gl_fence_sync(_condition: u32, _flags: u32) -> *mut c_void {
+    std::ptr::null_mut()
 }
 
 fn create_window_surface(

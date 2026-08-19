@@ -317,6 +317,7 @@ impl RenderResources {
         let Some(zp) = self.zone_playback.get_mut(&zone_id) else {
             return;
         };
+        zp.mpv.drain_events();
         if !zp.mpv.wants_redraw() {
             return;
         }
@@ -347,6 +348,7 @@ impl RenderResources {
                 eprintln!("hyprwalld: eglSwapBuffers failed for {name}: {e}");
             }
         }
+        zp.mpv.report_swap();
     }
 }
 

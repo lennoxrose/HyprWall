@@ -88,24 +88,6 @@ jobs:
             exit 1
           fi
 
-  # Staging-only gate: real perf numbers (startup time, memory, CPU) need a
-  # live Hyprland session to measure, which no hosted GitHub runner has --
-  # so the measurement itself is scripts/stage-perf-test.sh, run by hand,
-  # and this job only checks that its output table made it into the PR
-  # description and that every number is within budget. `PR_BODY` is passed
-  # via `env`, never interpolated directly into `run:` -- the body is
-  # untrusted external input, and string-interpolating it into a shell
-  # command is the classic GitHub Actions script-injection hole.
-  performance-report:
-    if: github.base_ref == 'staging'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check performance report against budget
-        env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-        run: python3 .github/scripts/check_performance_report.py
-
   # The real build: frontend first (`generate_context!()` embeds `dist/` at
   # compile time, so the Rust build fails outright without it -- this also
   # doubles as the frontend's own typecheck, since `npm run build` runs

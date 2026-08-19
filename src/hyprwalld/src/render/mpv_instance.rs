@@ -90,6 +90,15 @@ impl MpvInstance {
             // applies to files mpv classifies as a still image -- video
             // files and animated gif/webp are unaffected.
             init.set_option("image-display-duration", "inf")?;
+            // Untuned mpv defaults to an uncapped demuxer readahead cache
+            // (up to 150MiB per instance) -- too much for a wallpaper
+            // daemon that may run several zones at once on low-end
+            // hardware. (hwdec was tried here too and measured *worse* on
+            // real hardware -- shared-memory iGPU, so decode surfaces just
+            // added a pool on top of the existing footprint instead of
+            // moving it off system RAM. Left out deliberately.)
+            init.set_option("demuxer-max-bytes", "32MiB")?;
+            init.set_option("demuxer-max-back-bytes", "16MiB")?;
             Ok(())
         })?);
 
@@ -135,6 +144,18 @@ impl MpvInstance {
         Ok(())
     }
 
+    /// Tells mpv a rendered frame was actually presented. Required by mpv's
+    /// render-API contract (`mpv_render_context_report_swap`) -- without it,
+    /// mpv has no signal that a frame left its internal render queue. Not
+    /// what actually fixed this codebase's memory leak (heaptrack showed no
+    /// measurable change after adding this call) -- the real fix was a GL
+    /// fence sync leak, see `EglCore::get_proc_address`'s doc comment. Kept
+    /// anyway: it's still a real requirement of mpv's render-API contract,
+    /// independent of the leak investigation.
+    pub fn report_swap(&self) {
+        self.render_context.report_swap();
+    }
+
     /// Registers a callback fired from an mpv thread when a new frame is
     /// available. It must not call into mpv or GL.
     pub fn set_wakeup_callback(&mut self, cb: impl Fn() + Send + 'static) {
@@ -153,6 +174,23 @@ impl MpvInstance {
     pub fn set_paused(&self, paused: bool) -> anyhow::Result<()> {
         self.mpv.set_property("pause", paused)?;
         Ok(())
+    }
+
+    /// Drains mpv's core client event queue (`mpv_wait_event`) -- entirely
+    /// separate from the render API's own update callback (handled above via
+    /// `wants_redraw`/`set_wakeup_callback`). Nothing in this codebase reads
+    /// core events, but libmpv still generates them (`START_FILE`,
+    /// `FILE_LOADED`, `PLAYBACK_RESTART`, `END_FILE` -- all four fire on
+    /// every single `loop-file=inf` iteration) and its own docs are explicit
+    /// that failing to call `mpv_wait_event` leaves this queue growing
+    /// without bound. Not the cause of this codebase's real memory leak
+    /// (that was a GL fence sync leak in mpv's render API -- see
+    /// `EglCore::get_proc_address`'s doc comment): logged live, this queue
+    /// drains a handful of events once at startup per zone and stays empty
+    /// after, so it was never backlogging. Still worth draining per mpv's
+    /// own contract, just not the fix it was first suspected to be.
+    pub fn drain_events(&self) {
+        while self.mpv.wait_event(0.0).is_some() {}
     }
 
     /// Applies every per-picture display setting to this zone's mpv
